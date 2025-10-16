@@ -16,7 +16,8 @@ func InitRepo() error {
 	dirs := []string{
 		".hit",
 		".hit/objects",
-		".hit/refs",
+		".hit/refs/heads",
+		".hit/logs/refs/heads",
 	}
 
 	for _, dir := range dirs {
@@ -27,5 +28,19 @@ func InitRepo() error {
 
 	// Create HEAD file
 	headFile := filepath.Join(".hit", "HEAD")
-	return os.WriteFile(headFile, []byte("ref: refs/heads/master\n"), 0644)
+	headRefFile := filepath.Join(".hit", "refs", "heads", "master")
+	headLogRefFile := filepath.Join(".hit", "logs", "refs", "heads", "master")
+	err := os.WriteFile(headFile, []byte("ref: refs/heads/master\n"), 0644)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(headRefFile, []byte("0000000000000000000000000000000000000000"), 0644)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(headLogRefFile, []byte("[]"), 0644)
+	if err != nil {
+		return err
+	}
+	return err
 }

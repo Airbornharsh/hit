@@ -12,6 +12,7 @@ import (
 
 type Index struct {
 	Entries map[string]string `json:"entries"` // file path -> object hash
+	Changed bool              `json:"changed"`
 }
 
 // AddFile reads, hashes, compresses, and stores the file in .hit/objects
@@ -38,19 +39,24 @@ func AddFile(filePath string) (string, error) {
 		json.Unmarshal(data, index)
 	}
 
+	if existingHash, ok := index.Entries[filePath]; ok && existingHash == hash {
+		fmt.Println("No Change in File")
+		return "", nil
+	}
+
 	index.Entries[filePath] = hash
+	index.Changed = true
 
 	newData, _ := json.MarshalIndent(index, "", "  ")
 	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
 		return "", err
 	}
 
+	println("Added:", filePath)
 	return hash, nil
 }
 
 func AddAllFile(currentDir string) {
-	fmt.Println("Current Dir", currentDir)
-
 	var pwd = "/"
 	if currentDir == "." {
 		var pwdError error
@@ -71,11 +77,8 @@ func AddAllFile(currentDir string) {
 		path := pwd + "/" + entry.Name()
 		if entry.IsDir() {
 			checkHit := strings.HasSuffix(path, "/.hit")
-			if checkHit {
-				fmt.Println("Ignored: ", path)
-			} else {
+			if !checkHit {
 				AddAllFile(path)
-				fmt.Println("Choosed: ", path)
 			}
 		} else {
 			AddFile(path)
@@ -92,14 +95,13 @@ func RemoveFile(filePath string) (string, error) {
 		json.Unmarshal(data, index)
 	}
 
-	fmt.Println(filePath)
-
 	hash, exists := index.Entries[filePath]
 	if !exists {
 		return "", fmt.Errorf("file not staged: %s", filePath)
 	}
 
 	delete(index.Entries, filePath)
+	index.Changed = true
 
 	newData, _ := json.MarshalIndent(index, "", "  ")
 	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
