@@ -28,12 +28,11 @@ var addCmd = &cobra.Command{
 					fmt.Printf("File does not exist: %s\n", file)
 					continue
 				}
-				hash, err := repo.AddFile(filePath)
+				_, err := repo.AddFile(filePath)
 				if err != nil {
 					fmt.Printf("Error adding file %s: %v\n", file, err)
 					continue
 				}
-				fmt.Printf("Added %s as %s\n", file, hash)
 			}
 		}
 	},

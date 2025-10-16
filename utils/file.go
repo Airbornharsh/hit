@@ -38,3 +38,13 @@ func GetHead() (string, error) {
 	location := strings.TrimSpace(strings.Split(string(data), "ref: ")[1])
 	return location, nil
 }
+
+func GetHeadHash() (string, error) {
+	location, err := GetHead()
+	if err != nil {
+		return "", nil
+	}
+
+	file, _ := os.ReadFile(filepath.Join(".hit", location))
+	return string(file), nil
+}

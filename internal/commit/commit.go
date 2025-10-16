@@ -1,8 +1,6 @@
 package commit
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +8,7 @@ import (
 	"time"
 
 	"github.com/airbornharsh/hit/internal/repo"
+	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/airbornharsh/hit/utils"
 )
 
@@ -49,29 +48,19 @@ func CreateCommit(message string) (string, error) {
 
 	commits = append(commits, commit)
 
-	data, _ := json.Marshal(commit)
 	commitsData, _ := json.Marshal(commits)
-	hashBytes := sha1.Sum(data)
-	hash := hex.EncodeToString(hashBytes[:])
-
-	objectPath := filepath.Join(".hit", "objects", hash[:2])
-	os.MkdirAll(objectPath, 0755)
-	err = os.WriteFile(filepath.Join(objectPath, hash[2:]), data, 0644)
-	if err != nil {
-		return "", err
-	}
 
 	err = os.WriteFile(parentLogFilePath, commitsData, 0644)
 	if err != nil {
 		return "", err
 	}
 
-	err = os.WriteFile(".hit/refs/heads/master", []byte(hash), 0644)
+	err = os.WriteFile(".hit/refs/heads/master", []byte(stagedTreeHash), 0644)
 	if err != nil {
 		return "", err
 	}
 
-	return hash, nil
+	return stagedTreeHash, nil
 }
 
 func LogCommits() {
@@ -105,18 +94,90 @@ func LogCommits() {
 	// Display commits in chronological order (oldest first)
 	for i := 0; i < len(commits); i++ {
 		commit := commits[i]
-		hash := calculateCommitHash(commit)
 
-		fmt.Printf("commit %s\n", hash)
+		fmt.Printf("commit %s\n", commit.Tree)
 		fmt.Printf("Author: %s\n", commit.Author)
 		fmt.Printf("Date:   %s\n", commit.Timestamp.Format("Mon Jan 2 15:04:05 2006 -0700"))
 		fmt.Printf("\n    %s\n\n", commit.Message)
 	}
 }
 
-// calculateCommitHash calculates the hash for a commit (same logic as CreateCommit)
-func calculateCommitHash(commit Commit) string {
-	data, _ := json.Marshal(commit)
-	hashBytes := sha1.Sum(data)
-	return hex.EncodeToString(hashBytes[:])
+func ShowCommit(hash string) {
+	commitData, err := storage.LoadObject(hash)
+	if err != nil {
+		fmt.Println("Error loading commit:", err)
+		return
+	}
+
+	var tree repo.Tree
+	if err := json.Unmarshal([]byte(commitData), &tree); err != nil {
+		fmt.Println("Error parsing tree:", err)
+		return
+	}
+
+	parentCommitData, err := storage.LoadObject(tree.Parent)
+	if err != nil {
+		fmt.Println("Error loading parent commit:", err)
+		return
+	}
+
+	var parentTree repo.Tree
+	if err := json.Unmarshal([]byte(parentCommitData), &parentTree); err != nil {
+		fmt.Println("Error parsing tree:", err)
+		return
+	}
+
+	// Create sets of file names for comparison
+	currentFiles := make(map[string]bool)
+	parentFiles := make(map[string]bool)
+
+	for fileName := range tree.Entries {
+		currentFiles[fileName] = true
+	}
+
+	for fileName := range parentTree.Entries {
+		parentFiles[fileName] = true
+	}
+
+	// Find added files (in current but not in parent)
+	fmt.Println("Added files:")
+	added := false
+	for fileName := range currentFiles {
+		if !parentFiles[fileName] {
+			fmt.Printf("  + %s\n", fileName)
+			added = true
+		}
+	}
+	if !added {
+		fmt.Println("  (none)")
+	}
+
+	// Find deleted files (in parent but not in current)
+	fmt.Println("\nDeleted files:")
+	deleted := false
+	for fileName := range parentFiles {
+		if !currentFiles[fileName] {
+			fmt.Printf("  - %s\n", fileName)
+			deleted = true
+		}
+	}
+	if !deleted {
+		fmt.Println("  (none)")
+	}
+
+	// Find modified files (in both but with different hashes)
+	fmt.Println("\nModified files:")
+	modified := false
+	for fileName, fileHash := range tree.Entries {
+		if parentFiles[fileName] {
+			parentFileHash := parentTree.Entries[fileName]
+			if parentFileHash != fileHash {
+				fmt.Printf("  ~ %s\n", fileName)
+				modified = true
+			}
+		}
+	}
+	if !modified {
+		fmt.Println("  (none)")
+	}
 }

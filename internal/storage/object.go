@@ -35,15 +35,10 @@ func WriteObject(hash string, content []byte) error {
 }
 
 func LoadObject(hash string) (string, error) {
-	rootPath, err := utils.FindRepoRoot()
+	_, _, filePath, err := utils.HashInfo(hash)
 	if err != nil {
 		return "", err
 	}
-
-	segment := hash[0:2]
-	fileName := hash[2:]
-
-	filePath := filepath.Join(rootPath, ".hit", "objects", segment, fileName)
 
 	file, err := os.Open(filePath)
 	if err != nil {

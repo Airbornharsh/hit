@@ -7,19 +7,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/airbornharsh/hit/utils"
 )
 
-type TreeEntry struct {
-	Name string `json:"name"`
-	Hash string `json:"hash"`
-}
-
 type Tree struct {
-	Entries []TreeEntry `json:"entries"`
+	Entries map[string]string `json:"entries"` // file path -> object hash
+	Parent  string            `json:"parent"`
 }
 
 var ErrNoStagedChanges = errors.New("no staged changes to commit")
@@ -57,47 +52,28 @@ func BuildTreeFromStage() (string, error) {
 		return buildEmptyTree()
 	}
 
-	rootTree := &Tree{Entries: make([]TreeEntry, 0)}
+	rootTree := &Tree{Entries: make(map[string]string)}
 
-	var sortedPaths []string
-	for path := range index.Entries {
-		sortedPaths = append(sortedPaths, path)
-	}
-	sort.Strings(sortedPaths)
-
-	println("Sorted Paths", sortedPaths)
-
-	for _, absolutePath := range sortedPaths {
-		hash := index.Entries[absolutePath]
-
+	for absolutePath, hash := range index.Entries {
 		relativePath, err := filepath.Rel(repoRoot, absolutePath)
 		if err != nil {
 			continue
 		}
 
-		println("Relative Path", relativePath)
-
-		// Use forward slashes for consistency
 		relativePath = filepath.ToSlash(relativePath)
-
-		// Add file entry with relative path as name
-		rootTree.Entries = append(rootTree.Entries, TreeEntry{
-			Name: relativePath,
-			Hash: hash,
-		})
+		rootTree.Entries[relativePath] = hash
 	}
 
-	sort.Slice(rootTree.Entries, func(i, j int) bool {
-		return rootTree.Entries[i].Name < rootTree.Entries[j].Name
-	})
+	parentHash, _ := utils.GetHeadHash()
+	rootTree.Parent = parentHash
 
-	println("Root Tree", rootTree)
+	println(parentHash)
 
 	return storeTree(rootTree)
 }
 
 func buildEmptyTree() (string, error) {
-	emptyTree := &Tree{Entries: make([]TreeEntry, 0)}
+	emptyTree := &Tree{Entries: make(map[string]string), Parent: ""}
 	return storeTree(emptyTree)
 }
 

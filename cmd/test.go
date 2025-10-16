@@ -7,12 +7,14 @@ import (
 )
 
 var testCmd = &cobra.Command{
-	Use:   "test",
+	Use:   "test [hash]",
 	Short: "Testing Comand",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		num, err := storage.LoadObject("a4cd450aef96a93e91629d6d7d39261cbb9fb931")
-		println(num, err)
-		println("Test Command")
+		for _, hash := range args {
+			num, err := storage.LoadObject(hash)
+			println(num, err)
+		}
 	},
 }
 
