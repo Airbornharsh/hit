@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func FindRepoRoot() (string, error) {
@@ -25,4 +26,15 @@ func FindRepoRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+func GetHead() (string, error) {
+	headFilePath := filepath.Join(".hit", "HEAD")
+
+	data, err := os.ReadFile(headFilePath)
+	if err != nil {
+		return "", err
+	}
+	location := strings.TrimSpace(strings.Split(string(data), "ref: ")[1])
+	return location, nil
 }

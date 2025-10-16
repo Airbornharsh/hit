@@ -40,7 +40,7 @@ func AddFile(filePath string) (string, error) {
 	}
 
 	if existingHash, ok := index.Entries[filePath]; ok && existingHash == hash {
-		fmt.Println("No Change in File")
+		println("No Change in File")
 		return "", nil
 	}
 

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/airbornharsh/hit/internal/commit"
 
 	"github.com/spf13/cobra"
@@ -14,13 +15,13 @@ var commitCmd = &cobra.Command{
 	Short: "Record changes to the repository",
 	Run: func(cmd *cobra.Command, args []string) {
 		if message == "" {
-			fmt.Println("Please provide a commit message using -m")
+			println("Please provide a commit message using -m")
 			return
 		}
 
 		hash, err := commit.CreateCommit(message)
 		if err != nil {
-			fmt.Println("Error creating commit:", err)
+			println("Error creating commit:", err)
 			return
 		}
 

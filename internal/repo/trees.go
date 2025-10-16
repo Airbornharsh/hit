@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -66,7 +65,7 @@ func BuildTreeFromStage() (string, error) {
 	}
 	sort.Strings(sortedPaths)
 
-	fmt.Println("Sorted Paths", sortedPaths)
+	println("Sorted Paths", sortedPaths)
 
 	for _, absolutePath := range sortedPaths {
 		hash := index.Entries[absolutePath]
@@ -76,7 +75,7 @@ func BuildTreeFromStage() (string, error) {
 			continue
 		}
 
-		fmt.Println("Relative Path", relativePath)
+		println("Relative Path", relativePath)
 
 		// Use forward slashes for consistency
 		relativePath = filepath.ToSlash(relativePath)
@@ -92,7 +91,7 @@ func BuildTreeFromStage() (string, error) {
 		return rootTree.Entries[i].Name < rootTree.Entries[j].Name
 	})
 
-	fmt.Println("Root Tree", rootTree)
+	println("Root Tree", rootTree)
 
 	return storeTree(rootTree)
 }
