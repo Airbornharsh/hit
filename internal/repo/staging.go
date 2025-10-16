@@ -82,3 +82,60 @@ func AddAllFile(currentDir string) {
 		}
 	}
 }
+
+func RemoveFile(filePath string) (string, error) {
+	indexFile := filepath.Join(".hit", "index.json")
+
+	index := &Index{Entries: make(map[string]string)}
+
+	if data, err := os.ReadFile(indexFile); err == nil {
+		json.Unmarshal(data, index)
+	}
+
+	fmt.Println(filePath)
+
+	hash, exists := index.Entries[filePath]
+	if !exists {
+		return "", fmt.Errorf("file not staged: %s", filePath)
+	}
+
+	delete(index.Entries, filePath)
+
+	newData, _ := json.MarshalIndent(index, "", "  ")
+	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
+		return "", err
+	}
+
+	return hash, nil
+}
+
+func RemoveAllFile(currentDir string) {
+	var pwd = "/"
+	if currentDir == "." {
+		var pwdError error
+		pwd, pwdError = os.Getwd()
+		if pwdError != nil {
+			return
+		}
+	} else {
+		pwd = currentDir
+	}
+
+	entries, entriesErr := os.ReadDir(pwd)
+	if entriesErr != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		path := pwd + "/" + entry.Name()
+		if entry.IsDir() {
+			checkHit := strings.HasSuffix(path, "/.hit")
+			if checkHit {
+				continue
+			}
+			RemoveAllFile(path)
+		} else {
+			_, _ = RemoveFile(path)
+		}
+	}
+}

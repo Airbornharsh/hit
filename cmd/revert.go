@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var addCmd = &cobra.Command{
-	Use:   "add [file]",
-	Short: "Add file(s) to staging area",
+var revertCmd = &cobra.Command{
+	Use:   "revert [file]",
+	Short: "Revert file(s) from staging area",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, file := range args {
@@ -22,23 +22,23 @@ var addCmd = &cobra.Command{
 			}
 			filePath := filepath.Join(pwd, file)
 			if file == "." || info.IsDir() {
-				repo.AddAllFile(filePath)
+				repo.RemoveAllFile(filePath)
 			} else {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
 					fmt.Printf("File does not exist: %s\n", file)
 					continue
 				}
-				hash, err := repo.AddFile(filePath)
+				hash, err := repo.RemoveFile(filePath)
 				if err != nil {
-					fmt.Printf("Error adding file %s: %v\n", file, err)
+					fmt.Printf("Error reverting file %s: %v\n", file, err)
 					continue
 				}
-				fmt.Printf("Added %s as %s\n", file, hash)
+				fmt.Printf("Reverted %s as %s\n", file, hash)
 			}
 		}
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(revertCmd)
 }
