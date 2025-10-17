@@ -194,3 +194,82 @@ func ShowCommit(hash string) {
 		fmt.Println("  (none)")
 	}
 }
+
+func ShowCommitExpanded(hash string) {
+	commitData, err := storage.LoadObject(hash)
+	if err != nil {
+		fmt.Println("Error loading commit:", err)
+		return
+	}
+
+	var tree repo.Tree
+	if err := json.Unmarshal([]byte(commitData), &tree); err != nil {
+		fmt.Println("Error parsing tree:", err)
+		return
+	}
+
+	if tree.Parent == "" || tree.Parent == "0000000000000000000000000000000000000000" {
+		if len(tree.Entries) == 0 {
+			fmt.Println("(no files)")
+			return
+		}
+		for fileName, fileHash := range tree.Entries {
+			fmt.Printf("diff -- %s (added)\n", fileName)
+			diff := storage.GetDifference("", fileHash)
+			if diff == "" {
+				fmt.Println("(no content)")
+			} else {
+				fmt.Println(diff)
+			}
+		}
+		return
+	}
+
+	parentCommitData, err := storage.LoadObject(tree.Parent)
+	if err != nil {
+		fmt.Println("Error loading parent commit:", err)
+		return
+	}
+
+	var parentTree repo.Tree
+	if err := json.Unmarshal([]byte(parentCommitData), &parentTree); err != nil {
+		fmt.Println("Error parsing parent tree:", err)
+		return
+	}
+
+	printed := false
+	for fileName, fileHash := range tree.Entries {
+		parentHash, ok := parentTree.Entries[fileName]
+		if !ok {
+			// Added file
+			fmt.Printf("diff -- %s (added)\n", fileName)
+			diff := storage.GetDifference("", fileHash)
+			if diff != "" {
+				fmt.Println(diff)
+			}
+			printed = true
+		} else if parentHash != fileHash {
+			// Modified file
+			diff := storage.GetDifference(parentHash, fileHash)
+			if diff != "" {
+				fmt.Printf("diff -- %s (modified)\n", fileName)
+				fmt.Println(diff)
+				printed = true
+			}
+		}
+	}
+	for fileName, parentHash := range parentTree.Entries {
+		if _, ok := tree.Entries[fileName]; !ok {
+			// Deleted file
+			fmt.Printf("diff -- %s (deleted)\n", fileName)
+			diff := storage.GetDifference(parentHash, "")
+			if diff != "" {
+				fmt.Println(diff)
+			}
+			printed = true
+		}
+	}
+	if !printed {
+		fmt.Println("(no changes)")
+	}
+}
