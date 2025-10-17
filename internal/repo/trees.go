@@ -43,12 +43,12 @@ func BuildTreeFromStage() (string, error) {
 	}
 
 	index.Changed = false
-	newData, _ := json.MarshalIndent(index, "", "  ")
-	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
-		return "", err
-	}
 
 	if len(index.Entries) == 0 {
+		newData, _ := json.MarshalIndent(index, "", "  ")
+		if err := os.WriteFile(indexFile, newData, 0644); err != nil {
+			return "", err
+		}
 		return buildEmptyTree()
 	}
 
@@ -62,6 +62,12 @@ func BuildTreeFromStage() (string, error) {
 
 		relativePath = filepath.ToSlash(relativePath)
 		rootTree.Entries[relativePath] = hash
+	}
+
+	index.Entries = make(map[string]string)
+	newData, _ := json.MarshalIndent(index, "", "  ")
+	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
+		return "", err
 	}
 
 	parentHash, _ := utils.GetHeadHash()

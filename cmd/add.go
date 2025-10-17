@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/airbornharsh/hit/internal/repo"
 	"github.com/spf13/cobra"
@@ -15,23 +16,28 @@ var addCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, file := range args {
-			info, _ := os.Stat(file)
 			pwd, err := os.Getwd()
 			if err != nil {
 				continue
 			}
 			filePath := filepath.Join(pwd, file)
-			if file == "." || info.IsDir() {
+
+			if file == "." {
 				repo.AddAllFile(filePath)
 			} else {
-				if _, err := os.Stat(file); os.IsNotExist(err) {
-					fmt.Printf("File does not exist: %s\n", file)
-					continue
-				}
-				_, err := repo.AddFile(filePath)
-				if err != nil {
-					fmt.Printf("Error adding file %s: %v\n", file, err)
-					continue
+				// Check if it's a directory
+				if info, err := os.Stat(file); err == nil && info.IsDir() {
+					repo.AddAllFile(filePath)
+				} else {
+					// Try to add the file (AddFile will handle non-existent files)
+					_, err := repo.AddFile(filePath)
+					if err != nil {
+						// Don't print error for non-existent files as AddFile already handles it
+						if !strings.Contains(err.Error(), "file does not exist") {
+							fmt.Printf("Error adding file %s: %v\n", file, err)
+						}
+						continue
+					}
 				}
 			}
 		}

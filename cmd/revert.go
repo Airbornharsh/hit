@@ -22,13 +22,13 @@ var revertCmd = &cobra.Command{
 			}
 			filePath := filepath.Join(pwd, file)
 			if file == "." || info.IsDir() {
-				repo.RemoveAllFile(filePath)
+				repo.RevertAllFile(filePath)
 			} else {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
 					fmt.Printf("File does not exist: %s\n", file)
 					continue
 				}
-				hash, err := repo.RemoveFile(filePath)
+				hash, err := repo.RevertFile(filePath)
 				if err != nil {
 					fmt.Printf("Error reverting file %s: %v\n", file, err)
 					continue

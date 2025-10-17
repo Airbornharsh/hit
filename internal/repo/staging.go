@@ -17,6 +17,11 @@ type Index struct {
 
 // AddFile reads, hashes, compresses, and stores the file in .hit/objects
 func AddFile(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		removeFromIndex(filePath)
+		return "", fmt.Errorf("file does not exist: %s", filePath)
+	}
+
 	// Read file
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -68,25 +73,52 @@ func AddAllFile(currentDir string) {
 		pwd = currentDir
 	}
 
-	entries, entriesErr := os.ReadDir(pwd)
-	if entriesErr != nil {
-		return
+	indexFile := filepath.Join(".hit", "index.json")
+	index := &Index{Entries: make(map[string]string)}
+	if data, err := os.ReadFile(indexFile); err == nil {
+		json.Unmarshal(data, index)
 	}
 
-	for _, entry := range entries {
-		path := pwd + "/" + entry.Name()
-		if entry.IsDir() {
-			checkHit := strings.HasSuffix(path, "/.hit")
-			if !checkHit {
-				AddAllFile(path)
-			}
-		} else {
-			AddFile(path)
+	existingFiles := collectExistingFiles(pwd)
+
+	for filePath := range existingFiles {
+		AddFile(filePath)
+	}
+
+	for filePath := range index.Entries {
+		if !existingFiles[filePath] && strings.HasPrefix(filePath, pwd) {
+			removeFromIndex(filePath)
 		}
 	}
 }
 
-func RemoveFile(filePath string) (string, error) {
+func collectExistingFiles(rootDir string) map[string]bool {
+	existingFiles := make(map[string]bool)
+
+	var collectFiles func(dir string)
+	collectFiles = func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+			if entry.IsDir() {
+				if !strings.HasSuffix(path, ".hit") {
+					collectFiles(path)
+				}
+			} else {
+				existingFiles[path] = true
+			}
+		}
+	}
+
+	collectFiles(rootDir)
+	return existingFiles
+}
+
+func RevertFile(filePath string) (string, error) {
 	indexFile := filepath.Join(".hit", "index.json")
 
 	index := &Index{Entries: make(map[string]string)}
@@ -111,7 +143,7 @@ func RemoveFile(filePath string) (string, error) {
 	return hash, nil
 }
 
-func RemoveAllFile(currentDir string) {
+func RevertAllFile(currentDir string) {
 	var pwd = "/"
 	if currentDir == "." {
 		var pwdError error
@@ -135,9 +167,27 @@ func RemoveAllFile(currentDir string) {
 			if checkHit {
 				continue
 			}
-			RemoveAllFile(path)
+			RevertAllFile(path)
 		} else {
-			_, _ = RemoveFile(path)
+			_, _ = RevertFile(path)
 		}
+	}
+}
+
+func removeFromIndex(filePath string) {
+	indexFile := filepath.Join(".hit", "index.json")
+	index := &Index{Entries: make(map[string]string)}
+
+	if data, err := os.ReadFile(indexFile); err == nil {
+		json.Unmarshal(data, index)
+	}
+
+	if _, exists := index.Entries[filePath]; exists {
+		delete(index.Entries, filePath)
+		index.Changed = true
+
+		newData, _ := json.MarshalIndent(index, "", "  ")
+		os.WriteFile(indexFile, newData, 0644)
+		fmt.Printf("Removed from index: %s\n", filePath)
 	}
 }
