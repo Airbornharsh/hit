@@ -5,8 +5,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var logsCmd = &cobra.Command{
-	Use:   "logs",
+var logCmd = &cobra.Command{
+	Use:   "log",
 	Short: "Show Commits",
 	Run: func(cmd *cobra.Command, args []string) {
 		commit.LogCommits()
@@ -14,5 +14,5 @@ var logsCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(logCmd)
 }
