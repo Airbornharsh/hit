@@ -1,9 +1,13 @@
 package repo
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/airbornharsh/hit/internal/storage"
 )
 
 func InitRepo() error {
@@ -26,6 +30,8 @@ func InitRepo() error {
 		}
 	}
 
+	InitializeIndex()
+
 	// Create HEAD file
 	headFilePath := filepath.Join(".hit", "HEAD")
 	headRefFilePath := filepath.Join(".hit", "refs", "heads", "master")
@@ -43,4 +49,95 @@ func InitRepo() error {
 		return err
 	}
 	return err
+}
+
+func InitializeIndex() {
+	// Get current working directory (repo root)
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v\n", err)
+		return
+	}
+
+	// Create index structure
+	index := &Index{
+		Entries: make(map[string]string),
+		Changed: false,
+	}
+
+	// Collect all files in the repository
+	existingFiles := collectAllFiles(repoRoot)
+
+	// Process each file
+	for filePath := range existingFiles {
+		// Convert absolute path to relative path
+		relPath, err := filepath.Rel(repoRoot, filePath)
+		if err != nil {
+			fmt.Printf("Error converting path %s: %v\n", filePath, err)
+			continue
+		}
+
+		// Read file content
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Printf("Error reading file %s: %v\n", filePath, err)
+			continue
+		}
+
+		// Hash content
+		hash := storage.Hash(content)
+
+		// Store object
+		if err := storage.WriteObject(hash, content); err != nil {
+			fmt.Printf("Error storing object for %s: %v\n", filePath, err)
+			continue
+		}
+
+		// Add to index
+		index.Entries[relPath] = hash
+		index.Changed = true
+	}
+
+	// Write index to file
+	indexFile := filepath.Join(".hit", "index.json")
+	newData, err := json.MarshalIndent(index, "", "  ")
+	if err != nil {
+		fmt.Printf("Error marshaling index: %v\n", err)
+		return
+	}
+
+	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
+		fmt.Printf("Error writing index file: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Initialized index with %d files\n", len(index.Entries))
+}
+
+// collectAllFiles recursively collects all files in the given directory, excluding .hit
+func collectAllFiles(rootDir string) map[string]bool {
+	existingFiles := make(map[string]bool)
+
+	var collectFiles func(dir string)
+	collectFiles = func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+			if entry.IsDir() {
+				// Skip .hit directory
+				if !strings.HasSuffix(path, ".hit") {
+					collectFiles(path)
+				}
+			} else {
+				existingFiles[path] = true
+			}
+		}
+	}
+
+	collectFiles(rootDir)
+	return existingFiles
 }

@@ -10,6 +10,40 @@ import (
 	"github.com/airbornharsh/hit/internal/storage"
 )
 
+func getRepoRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		hitDir := filepath.Join(dir, ".hit")
+		if _, err := os.Stat(hitDir); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("not in a git repository")
+		}
+		dir = parent
+	}
+}
+
+func getRelativePath(absPath string) (string, error) {
+	repoRoot, err := getRepoRoot()
+	if err != nil {
+		return "", err
+	}
+
+	relPath, err := filepath.Rel(repoRoot, absPath)
+	if err != nil {
+		return "", err
+	}
+
+	return relPath, nil
+}
+
 type Index struct {
 	Entries map[string]string `json:"entries"` // file path -> object hash
 	Changed bool              `json:"changed"`
@@ -17,26 +51,33 @@ type Index struct {
 
 // AddFile reads, hashes, compresses, and stores the file in .hit/objects
 func AddFile(filePath string) (string, error) {
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		removeFromIndex(filePath)
-		return "", fmt.Errorf("file does not exist: %s", filePath)
-	}
-
-	// Read file
-	content, err := os.ReadFile(filePath)
+	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		return "", err
 	}
 
-	// Hash content
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		relPath, _ := getRelativePath(absPath)
+		removeFromIndex(relPath)
+		return "", fmt.Errorf("file does not exist: %s", filePath)
+	}
+
+	relPath, err := getRelativePath(absPath)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", err
+	}
+
 	hash := storage.Hash(content)
 
-	// Store object
 	if err := storage.WriteObject(hash, content); err != nil {
 		return "", err
 	}
 
-	// Update staging index
 	indexFile := filepath.Join(".hit", "index.json")
 	index := &Index{Entries: make(map[string]string)}
 
@@ -44,12 +85,11 @@ func AddFile(filePath string) (string, error) {
 		json.Unmarshal(data, index)
 	}
 
-	if existingHash, ok := index.Entries[filePath]; ok && existingHash == hash {
-		println("No Change in File")
+	if existingHash, ok := index.Entries[relPath]; ok && existingHash == hash {
 		return "", nil
 	}
 
-	index.Entries[filePath] = hash
+	index.Entries[relPath] = hash
 	index.Changed = true
 
 	newData, _ := json.MarshalIndent(index, "", "  ")
@@ -57,7 +97,7 @@ func AddFile(filePath string) (string, error) {
 		return "", err
 	}
 
-	println("Added:", filePath)
+	println("Added to Stage:", relPath)
 	return hash, nil
 }
 
@@ -73,6 +113,11 @@ func AddAllFile(currentDir string) {
 		pwd = currentDir
 	}
 
+	repoRoot, err := getRepoRoot()
+	if err != nil {
+		return
+	}
+
 	indexFile := filepath.Join(".hit", "index.json")
 	index := &Index{Entries: make(map[string]string)}
 	if data, err := os.ReadFile(indexFile); err == nil {
@@ -82,12 +127,16 @@ func AddAllFile(currentDir string) {
 	existingFiles := collectExistingFiles(pwd)
 
 	for filePath := range existingFiles {
-		AddFile(filePath)
+		absPath := filepath.Join(repoRoot, filePath)
+		AddFile(absPath)
 	}
 
 	for filePath := range index.Entries {
-		if !existingFiles[filePath] && strings.HasPrefix(filePath, pwd) {
-			removeFromIndex(filePath)
+		if !existingFiles[filePath] {
+			absFilePath := filepath.Join(repoRoot, filePath)
+			if strings.HasPrefix(absFilePath, pwd) {
+				removeFromIndex(filePath)
+			}
 		}
 	}
 }
@@ -103,13 +152,15 @@ func collectExistingFiles(rootDir string) map[string]bool {
 		}
 
 		for _, entry := range entries {
-			path := filepath.Join(dir, entry.Name())
+			absPath := filepath.Join(dir, entry.Name())
 			if entry.IsDir() {
-				if !strings.HasSuffix(path, ".hit") {
-					collectFiles(path)
+				if !strings.HasSuffix(absPath, ".hit") {
+					collectFiles(absPath)
 				}
 			} else {
-				existingFiles[path] = true
+				if relPath, err := getRelativePath(absPath); err == nil {
+					existingFiles[relPath] = true
+				}
 			}
 		}
 	}
@@ -119,6 +170,16 @@ func collectExistingFiles(rootDir string) map[string]bool {
 }
 
 func ResetFile(filePath string) (string, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	relPath, err := getRelativePath(absPath)
+	if err != nil {
+		return "", err
+	}
+
 	indexFile := filepath.Join(".hit", "index.json")
 
 	index := &Index{Entries: make(map[string]string)}
@@ -127,12 +188,12 @@ func ResetFile(filePath string) (string, error) {
 		json.Unmarshal(data, index)
 	}
 
-	hash, exists := index.Entries[filePath]
+	hash, exists := index.Entries[relPath]
 	if !exists {
-		return "", fmt.Errorf("file not staged: %s", filePath)
+		return "", fmt.Errorf("file not staged: %s", relPath)
 	}
 
-	delete(index.Entries, filePath)
+	delete(index.Entries, relPath)
 	index.Changed = true
 
 	newData, _ := json.MarshalIndent(index, "", "  ")
@@ -161,9 +222,9 @@ func ResetAllFile(currentDir string) {
 	}
 
 	for _, entry := range entries {
-		path := pwd + "/" + entry.Name()
+		path := filepath.Join(pwd, entry.Name())
 		if entry.IsDir() {
-			checkHit := strings.HasSuffix(path, "/.hit")
+			checkHit := strings.HasSuffix(path, ".hit")
 			if checkHit {
 				continue
 			}
@@ -175,6 +236,17 @@ func ResetAllFile(currentDir string) {
 }
 
 func removeFromIndex(filePath string) {
+	var relPath string
+	if filepath.IsAbs(filePath) {
+		var err error
+		relPath, err = getRelativePath(filePath)
+		if err != nil {
+			return
+		}
+	} else {
+		relPath = filePath
+	}
+
 	indexFile := filepath.Join(".hit", "index.json")
 	index := &Index{Entries: make(map[string]string)}
 
@@ -182,12 +254,12 @@ func removeFromIndex(filePath string) {
 		json.Unmarshal(data, index)
 	}
 
-	if _, exists := index.Entries[filePath]; exists {
-		delete(index.Entries, filePath)
+	if _, exists := index.Entries[relPath]; exists {
+		delete(index.Entries, relPath)
 		index.Changed = true
 
 		newData, _ := json.MarshalIndent(index, "", "  ")
 		os.WriteFile(indexFile, newData, 0644)
-		fmt.Printf("Removed from index: %s\n", filePath)
+		fmt.Printf("Removed from index: %s\n", relPath)
 	}
 }

@@ -48,6 +48,7 @@ func LoadObject(hash string) (string, error) {
 
 	// Create zlib reader directly from the file
 	reader, err := zlib.NewReader(file)
+	println(err)
 	if err != nil {
 		return "", err
 	}

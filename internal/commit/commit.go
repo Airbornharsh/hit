@@ -115,6 +115,19 @@ func ShowCommit(hash string) {
 		return
 	}
 
+	// Check if this is the initial commit (no parent)
+	if tree.Parent == "" || tree.Parent == "0000000000000000000000000000000000000000" {
+		fmt.Println("Initial commit - all files:")
+		if len(tree.Entries) == 0 {
+			fmt.Println("  (no files)")
+		} else {
+			for fileName := range tree.Entries {
+				fmt.Printf("  + %s\n", fileName)
+			}
+		}
+		return
+	}
+
 	parentCommitData, err := storage.LoadObject(tree.Parent)
 	if err != nil {
 		fmt.Println("Error loading parent commit:", err)
@@ -123,7 +136,7 @@ func ShowCommit(hash string) {
 
 	var parentTree repo.Tree
 	if err := json.Unmarshal([]byte(parentCommitData), &parentTree); err != nil {
-		fmt.Println("Error parsing tree:", err)
+		fmt.Println("Error parsing parent tree:", err)
 		return
 	}
 

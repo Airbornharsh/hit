@@ -45,35 +45,20 @@ func BuildTreeFromStage() (string, error) {
 	index.Changed = false
 
 	if len(index.Entries) == 0 {
-		newData, _ := json.MarshalIndent(index, "", "  ")
-		if err := os.WriteFile(indexFile, newData, 0644); err != nil {
-			return "", err
-		}
 		return buildEmptyTree()
 	}
 
 	rootTree := &Tree{Entries: make(map[string]string)}
 
-	for absolutePath, hash := range index.Entries {
-		relativePath, err := filepath.Rel(repoRoot, absolutePath)
-		if err != nil {
-			continue
-		}
-
-		relativePath = filepath.ToSlash(relativePath)
-		rootTree.Entries[relativePath] = hash
-	}
-
-	index.Entries = make(map[string]string)
-	newData, _ := json.MarshalIndent(index, "", "  ")
-	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
-		return "", err
+	for relativePath, hash := range index.Entries {
+		normalizedPath := filepath.ToSlash(relativePath)
+		rootTree.Entries[normalizedPath] = hash
 	}
 
 	parentHash, _ := utils.GetHeadHash()
 	rootTree.Parent = parentHash
 
-	println(parentHash)
+	println("Parent Commit", parentHash)
 
 	return storeTree(rootTree)
 }
