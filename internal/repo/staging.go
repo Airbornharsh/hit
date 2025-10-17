@@ -118,7 +118,7 @@ func collectExistingFiles(rootDir string) map[string]bool {
 	return existingFiles
 }
 
-func RevertFile(filePath string) (string, error) {
+func ResetFile(filePath string) (string, error) {
 	indexFile := filepath.Join(".hit", "index.json")
 
 	index := &Index{Entries: make(map[string]string)}
@@ -143,7 +143,7 @@ func RevertFile(filePath string) (string, error) {
 	return hash, nil
 }
 
-func RevertAllFile(currentDir string) {
+func ResetAllFile(currentDir string) {
 	var pwd = "/"
 	if currentDir == "." {
 		var pwdError error
@@ -167,9 +167,9 @@ func RevertAllFile(currentDir string) {
 			if checkHit {
 				continue
 			}
-			RevertAllFile(path)
+			ResetAllFile(path)
 		} else {
-			_, _ = RevertFile(path)
+			_, _ = ResetFile(path)
 		}
 	}
 }

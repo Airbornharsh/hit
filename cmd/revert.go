@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var revertCmd = &cobra.Command{
-	Use:   "revert [file]",
-	Short: "Revert file(s) from staging area",
+var resetCmd = &cobra.Command{
+	Use:   "reset [file]",
+	Short: "Reset file(s) from staging area",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, file := range args {
@@ -22,23 +22,23 @@ var revertCmd = &cobra.Command{
 			}
 			filePath := filepath.Join(pwd, file)
 			if file == "." || info.IsDir() {
-				repo.RevertAllFile(filePath)
+				repo.ResetAllFile(filePath)
 			} else {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
 					fmt.Printf("File does not exist: %s\n", file)
 					continue
 				}
-				hash, err := repo.RevertFile(filePath)
+				hash, err := repo.ResetFile(filePath)
 				if err != nil {
-					fmt.Printf("Error reverting file %s: %v\n", file, err)
+					fmt.Printf("Error resetting file %s: %v\n", file, err)
 					continue
 				}
-				fmt.Printf("Reverted %s as %s\n", file, hash)
+				fmt.Printf("Reseted %s as %s\n", file, hash)
 			}
 		}
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(revertCmd)
+	rootCmd.AddCommand(resetCmd)
 }
