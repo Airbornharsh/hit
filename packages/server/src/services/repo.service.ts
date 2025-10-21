@@ -1,5 +1,6 @@
 import { db } from '../db/mongo/init'
 import { IRepo } from '../db/mongo/models/Repo.schema'
+import HashService from './hash.service'
 import RemoteService from './remote.service'
 import ZlibService from './zlib.service'
 
@@ -80,7 +81,7 @@ class RepoService {
       lastModified: string
     }[] = []
     if (defaultBranchCommit && defaultBranchCommit.hash) {
-      files = await this.getRootFiles(defaultBranchCommit.hash)
+      files = await HashService.getRootFiles(defaultBranchCommit.hash)
     }
 
     return {
@@ -96,39 +97,6 @@ class RepoService {
       branches: repo.branches || [],
       files,
     }
-  }
-
-  static async getRootFiles(hash: string) {
-    const tree = await ZlibService.decompress(hash)
-    const treeData = JSON.parse(tree)
-
-    const fileMap = new Map<
-      string,
-      {
-        name: string
-        type: 'file' | 'directory'
-        lastModified: string
-      }
-    >()
-
-    const entries = Object.keys(treeData.entries || {})
-    const lastModified = treeData.lastModified || new Date().toISOString()
-
-    for (const name of entries) {
-      const parts = name.split('/')
-      const fileName = parts[0]
-      const fileType = parts.length > 1 ? 'directory' : 'file'
-
-      if (!fileMap.has(fileName)) {
-        fileMap.set(fileName, {
-          name: fileName,
-          type: fileType,
-          lastModified,
-        })
-      }
-    }
-
-    return Array.from(fileMap.values())
   }
 }
 

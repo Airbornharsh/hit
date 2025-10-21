@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, use } from 'react'
 import { useRepoStore } from '@/stores/repoStore'
 import { RepositoryHeader } from '@/components/repository/RepositoryHeader'
 import { RepositoryTabs } from '@/components/repository/RepositoryTabs'
-import { BranchSelector } from '@/components/repository/BranchSelector'
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
+import { FileTree } from '@/components/FileTree'
 import { Branch } from '@/types/repo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,10 +29,13 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
     branches,
     isBranchesLoading,
     setMetadata,
+    files,
   } = useRepoStore()
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const callOnce = useRef(false)
+
+  console.log(selectedBranch)
 
   useEffect(() => {
     setMetadata({
@@ -83,20 +86,20 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div>
       <Breadcrumbs
         items={[
           { label: 'Repositories', href: `/${userName}/repositories` },
           { label: repoName },
         ]}
+        className="mb-4"
       />
 
-      <RepositoryHeader repo={activeRepo} />
+      <RepositoryHeader repo={activeRepo} onBranchSelect={handleBranchSelect} />
       <RepositoryTabs repoName={repoName} userName={userName} />
 
-      {/* Show CLI commands if no branches exist */}
       {!isBranchesLoading && branches.length === 0 ? (
-        <Card className="border-border bg-card">
+        <Card className="border-border bg-card rounded-none">
           <CardHeader>
             <CardTitle className="text-foreground flex items-center gap-2">
               <GitBranch className="h-5 w-5" />
@@ -194,31 +197,20 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="border-border bg-card rounded-lg border p-6">
-          <div className="mb-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-foreground text-lg font-semibold">
-                Branch:{' '}
-              </h3>
-              <BranchSelector
-                repoName={repoName || ''}
-                onBranchSelect={handleBranchSelect}
-              />
-            </div>
-            <p className="text-muted-foreground text-sm">
-              Latest commit:{' '}
-              {(selectedBranch || activeBranch)?.headCommit?.slice(0, 8) ||
-                'N/A'}
-            </p>
-          </div>
-          <div className="text-muted-foreground">
-            <p>Branch content will be displayed here...</p>
-            <p className="mt-2 text-sm">
-              This is where you would show the file tree, README, or other
-              branch-specific content.
-            </p>
-          </div>
-        </div>
+        <FileTree
+          files={files.current || []}
+          currentPath={files.path || ''}
+          userName={userName}
+          repoName={repoName}
+          branchName={activeBranch?.name || 'main'}
+          root={true}
+          onFileSelect={(file) => {
+            console.log('Selected file:', file)
+          }}
+          onDirectorySelect={(path) => {
+            console.log('Selected directory:', path)
+          }}
+        />
       )}
     </div>
   )

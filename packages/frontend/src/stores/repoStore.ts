@@ -19,6 +19,14 @@ interface ApiError {
   }
 }
 
+interface FileTreeNode {
+  name: string
+  type: 'file' | 'directory'
+  path: string
+  lastModified: string
+  children?: FileTreeNode[]
+}
+
 interface RepoState {
   metadata: {
     username: string | null
@@ -33,11 +41,26 @@ interface RepoState {
   isReposLoading: boolean
   reposError: string | null
   reposPagination: PaginationMeta | null
+  // File system state
   files: {
-    name: string
-    type: 'file' | 'directory'
-    lastModified: string
-  }[]
+    path: string
+    current: {
+      name: string
+      type: 'file' | 'directory'
+      lastModified: string
+    }[]
+    currentFile?: {
+      path: string
+      content: string
+      size: number
+      lastModified: string
+    }
+  }
+  sidebar: {
+    tree: FileTreeNode[]
+    isLoading: boolean
+    error: string | null
+  }
 
   // Branches
   branches: Branch[]
@@ -74,7 +97,6 @@ interface RepoState {
   setBranches: (branches: Branch[]) => void
   setActiveBranch: (branch: Branch | null) => void
   fetchBranches: (repoName: string, params?: PaginationParams) => Promise<void>
-  fetchBranch: (repoName: string, branchName: string) => Promise<void>
   setBranchesLoading: (loading: boolean) => void
   setBranchesError: (error: string | null) => void
   setBranchesPagination: (pagination: PaginationMeta | null) => void
@@ -95,6 +117,26 @@ interface RepoState {
   setCommitsLoading: (loading: boolean) => void
   setCommitsError: (error: string | null) => void
   setCommitsPagination: (pagination: PaginationMeta | null) => void
+
+  // File system actions
+  fetchFiles: (
+    repoName: string,
+    branchName: string,
+    path?: string,
+    forSidebar?: boolean,
+  ) => Promise<void>
+  fetchFile: (
+    repoName: string,
+    branchName: string,
+    path: string,
+  ) => Promise<void>
+  fetchCompleteTreeStructure: (
+    repoName: string,
+    branchName: string,
+  ) => Promise<void>
+  setCurrentPath: (path: string) => void
+  setSidebarLoading: (loading: boolean) => void
+  setSidebarError: (error: string | null) => void
 
   // Utility actions
   clearErrors: () => void
@@ -119,8 +161,16 @@ export const useRepoStore = create<RepoState>()(
       isReposLoading: false,
       reposError: null,
       reposPagination: null,
-      files: [],
-
+      files: {
+        path: '',
+        current: [],
+        currentFile: undefined,
+      },
+      sidebar: {
+        tree: [],
+        isLoading: false,
+        error: null,
+      },
       branches: [],
       activeBranch: null,
       isBranchesLoading: false,
@@ -199,8 +249,19 @@ export const useRepoStore = create<RepoState>()(
           )
           const repo = response.data.data.repo
           const branches = response.data.data.branches
-          const files = response.data.data.files
-          set({ activeRepo: repo, branches, files: files })
+          const files = response.data.data.files as {
+            name: string
+            type: 'file' | 'directory'
+            lastModified: string
+          }[]
+          set({
+            activeRepo: repo,
+            branches,
+            files: {
+              path: '',
+              current: files,
+            },
+          })
         } catch (error) {
           console.error('Fetch repo error:', error)
           set({ reposError: 'Failed to fetch repository' })
@@ -281,35 +342,6 @@ export const useRepoStore = create<RepoState>()(
           const errorMessage =
             (error as ApiError)?.response?.data?.message ||
             'Failed to fetch branches'
-          set({ branchesError: errorMessage })
-        } finally {
-          set({ isBranchesLoading: false })
-        }
-      },
-
-      fetchBranch: async (repoName: string, branchName: string) => {
-        set({ isBranchesLoading: true, branchesError: null })
-        try {
-          const response = await AxiosClient.get(`/api/v1/branch/${branchName}`)
-          const branch = response.data.data.branch
-          set({ activeBranch: branch })
-
-          // Update branches array if branch exists
-          const currentBranches = get().branches
-          const branchIndex = currentBranches.findIndex(
-            (b) => b.name === branchName,
-          )
-          if (branchIndex >= 0) {
-            const updatedBranches = [...currentBranches]
-            updatedBranches[branchIndex] = branch
-            set({ branches: updatedBranches })
-          }
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error && 'response' in error
-              ? (error as ApiError)?.response?.data?.message ||
-                'Failed to fetch branch'
-              : 'Failed to fetch branch'
           set({ branchesError: errorMessage })
         } finally {
           set({ isBranchesLoading: false })
@@ -472,6 +504,172 @@ export const useRepoStore = create<RepoState>()(
         } finally {
           set({ isReposLoading: false })
         }
+      },
+
+      // File system actions
+      fetchFiles: async (
+        repoName: string,
+        branchName: string,
+        path?: string,
+        forSidebar: boolean = false,
+      ) => {
+        if (forSidebar) {
+          set({ sidebar: { ...get().sidebar, isLoading: true, error: null } })
+        } else {
+          set({ isReposLoading: true, reposError: null })
+        }
+
+        try {
+          const { username } = get().metadata
+          if (!username || !repoName || !branchName) return
+
+          const remote = constructRemote(username, repoName)
+          const queryParams = new URLSearchParams()
+          queryParams.append('remote', remote)
+          if (path) queryParams.append('path', path)
+
+          const url = `/api/v1/branch/${branchName}/files${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+          const response = await AxiosClient.get(url)
+
+          if (forSidebar) {
+            set({
+              sidebar: {
+                tree: response.data.data.files || [],
+                isLoading: false,
+                error: null,
+              },
+            })
+          } else {
+            set({
+              files: {
+                path: response.data.data.path || '',
+                current: response.data.data.files || [],
+              },
+            })
+          }
+        } catch (error: unknown) {
+          const errorMessage =
+            (error as ApiError)?.response?.data?.message ||
+            'Failed to fetch files'
+
+          if (forSidebar) {
+            set({
+              sidebar: {
+                ...get().sidebar,
+                isLoading: false,
+                error: errorMessage,
+              },
+            })
+          } else {
+            set({ reposError: errorMessage })
+          }
+        } finally {
+          if (forSidebar) {
+            set({ sidebar: { ...get().sidebar, isLoading: false } })
+          } else {
+            set({ isReposLoading: false })
+          }
+        }
+      },
+
+      fetchFile: async (repoName: string, branchName: string, path: string) => {
+        set({ isReposLoading: true, reposError: null })
+        try {
+          const { username } = get().metadata
+          if (!username || !repoName || !branchName) return
+
+          const remote = constructRemote(username, repoName)
+          const queryParams = new URLSearchParams()
+          queryParams.append('remote', remote)
+          queryParams.append('path', path)
+
+          const url = `/api/v1/branch/${branchName}/file${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+          const response = await AxiosClient.get(url)
+
+          // Store file content in a new state property
+          set({
+            files: {
+              ...get().files,
+              currentFile: {
+                path: path,
+                content: response.data.data.file.content,
+                size: response.data.data.file.size,
+                lastModified: response.data.data.file.lastModified,
+              },
+            },
+          })
+        } catch (error: unknown) {
+          const errorMessage =
+            (error as ApiError)?.response?.data?.message ||
+            'Failed to fetch file'
+          set({ reposError: errorMessage })
+        } finally {
+          set({ isReposLoading: false })
+        }
+      },
+
+      fetchCompleteTreeStructure: async (
+        repoName: string,
+        branchName: string,
+      ) => {
+        set({ sidebar: { ...get().sidebar, isLoading: true, error: null } })
+        try {
+          const { username } = get().metadata
+          if (!username || !repoName || !branchName) return
+
+          const remote = constructRemote(username, repoName)
+          const queryParams = new URLSearchParams()
+          queryParams.append('remote', remote)
+
+          const url = `/api/v1/branch/${branchName}/complete-tree${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+          const response = await AxiosClient.get(url)
+
+          set({
+            sidebar: {
+              tree: response.data.data.tree || [],
+              isLoading: false,
+              error: null,
+            },
+          })
+        } catch (error: unknown) {
+          const errorMessage =
+            (error as ApiError)?.response?.data?.message ||
+            'Failed to fetch complete tree structure'
+          set({
+            sidebar: {
+              ...get().sidebar,
+              isLoading: false,
+              error: errorMessage,
+            },
+          })
+        }
+      },
+
+      setCurrentPath: (path: string) => {
+        set({
+          files: {
+            ...get().files,
+            path: path,
+          },
+        })
+      },
+
+      setSidebarLoading: (loading: boolean) => {
+        set({
+          sidebar: {
+            ...get().sidebar,
+            isLoading: loading,
+          },
+        })
+      },
+
+      setSidebarError: (error: string | null) => {
+        set({
+          sidebar: {
+            ...get().sidebar,
+            error: error,
+          },
+        })
       },
     }),
     {

@@ -24,7 +24,6 @@ class CommitService {
           timestamp: commit.timestamp,
           message: commit.message,
         })
-        console.log('New Commit:', newCommit)
         if (!newCommit || !newCommit._id) {
           continue
         }
@@ -33,8 +32,6 @@ class CommitService {
         console.error('Create commit error:', e)
       }
     }
-
-    console.log('Head Commit:', headCommit)
 
     if (headCommit) {
       try {

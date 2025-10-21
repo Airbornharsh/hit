@@ -9,10 +9,14 @@ router.use(Middleware.authMiddleware)
 router.post('/', BranchController.createBranch)
 router.get('/', BranchController.getBranches)
 
-router.get('/:branchName', BranchController.getBranch)
-
 router.get('/:branchName/head-commit', BranchController.getHeadCommit)
 router.post('/:branchName/commits', BranchController.createCommit)
 router.get('/:branchName/commits/:commitHash', BranchController.getCommit)
+router.get('/:branchName/files', BranchController.getFiles)
+router.get('/:branchName/file', BranchController.getFile)
+router.get(
+  '/:branchName/complete-tree',
+  BranchController.getCompleteTreeStructure,
+)
 
 export default router

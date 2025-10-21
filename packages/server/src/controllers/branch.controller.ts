@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { db } from '../db/mongo/init'
 import RemoteService from '../services/remote.service'
 import CommitService from '../services/commit.service'
+import BranchService from '../services/branch.service'
 
 class BranchController {
   static async createBranch(req: Request, res: Response) {
@@ -106,36 +107,6 @@ class BranchController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch branches',
-      })
-      return
-    }
-  }
-
-  static async getBranch(req: Request, res: Response) {
-    try {
-      const { id } = req.params
-      const branch = await db?.BranchModel.findById(id).lean()
-
-      if (!branch || !branch?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch branch',
-        })
-        return
-      }
-
-      res.json({
-        success: true,
-        message: 'Branch fetched successfully',
-        data: {
-          branch,
-        },
-      })
-    } catch (error) {
-      console.error('Get branch error:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch branch',
       })
       return
     }
@@ -349,6 +320,91 @@ class BranchController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch commit',
+      })
+      return
+    }
+  }
+
+  static async getFiles(req: Request, res: Response) {
+    try {
+      const { branchName } = req.params
+      const { remote, path } = req.query
+
+      const result = await BranchService.getFiles(
+        remote as string,
+        branchName,
+        (path as string) || '',
+      )
+
+      res.json({
+        success: true,
+        message: 'Files fetched successfully',
+        data: result,
+      })
+    } catch (error) {
+      console.error('Get files error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch files',
+      })
+      return
+    }
+  }
+
+  static async getFile(req: Request, res: Response) {
+    try {
+      const { branchName } = req.params
+      const { remote, path } = req.query
+
+      if (!path) {
+        res.status(400).json({
+          success: false,
+          message: 'Path parameter is required',
+        })
+        return
+      }
+
+      const file = await BranchService.getFile(
+        remote as string,
+        branchName,
+        path as string,
+      )
+
+      res.json({
+        success: true,
+        message: 'File fetched successfully',
+        data: { file },
+      })
+    } catch (error) {
+      console.error('Get file error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch file',
+      })
+      return
+    }
+  }
+
+  static async getCompleteTreeStructure(req: Request, res: Response) {
+    try {
+      const { branchName } = req.params
+      const { remote } = req.query
+
+      const result = await BranchService.getCompleteTreeStructure(
+        remote as string,
+        branchName,
+      )
+
+      res.json({
+        success: true,
+        message: 'Complete tree structure fetched successfully',
+        data: result,
+      })
+    } catch (error) {
+      console.error('Get complete tree structure error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch complete tree structure',
       })
       return
     }
