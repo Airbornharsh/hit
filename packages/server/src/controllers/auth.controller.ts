@@ -41,6 +41,8 @@ class AuthController {
             clerkId: user.clerkId,
             imageUrl: user.imageUrl,
             admin: user.admin,
+            username: user.username,
+            provider: user.provider,
           },
         },
       })
@@ -187,6 +189,82 @@ class AuthController {
           email: '',
           token: '',
         },
+      })
+    }
+  }
+
+  static async updateUsername(req: Request, res: Response) {
+    try {
+      const { userId } = (req as any).user
+      const { username } = req.body
+
+      if (!username || typeof username !== 'string') {
+        res.status(400).json({
+          success: false,
+          message: 'Username is required',
+        })
+        return
+      }
+
+      // Validate username format
+      if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Username can only contain letters, numbers, underscores, and hyphens',
+        })
+        return
+      }
+
+      if (username.length < 3 || username.length > 20) {
+        res.status(400).json({
+          success: false,
+          message: 'Username must be between 3 and 20 characters',
+        })
+        return
+      }
+
+      // Check if username is already taken
+      const existingUser = await db?.UserModel.findOne({
+        username,
+        _id: { $ne: userId },
+      })
+
+      if (existingUser) {
+        res.status(400).json({
+          success: false,
+          message: 'Username is already taken',
+        })
+        return
+      }
+
+      // Update user's username
+      const updatedUser = await db?.UserModel.findByIdAndUpdate(
+        userId,
+        { username },
+        { new: true },
+      )
+
+      if (!updatedUser) {
+        res.status(404).json({
+          success: false,
+          message: 'User not found',
+        })
+        return
+      }
+
+      res.json({
+        success: true,
+        message: 'Username updated successfully',
+        data: {
+          username: updatedUser.username,
+        },
+      })
+    } catch (error) {
+      console.error('Update username error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
       })
     }
   }

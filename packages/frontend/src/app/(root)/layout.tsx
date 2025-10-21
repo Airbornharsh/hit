@@ -1,6 +1,5 @@
 'use client'
-import Sidebar from '@/components/Sidebar'
-import { Button } from '@/components/ui/button'
+import { AppSidebar } from '@/components/layout/AppSidebar'
 import { useAuthStore } from '@/stores/authStore'
 import { getTerminalToken, setTerminalToken } from '@/utils/session'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -77,27 +76,18 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen">
-      {isLoadSidebar && <Sidebar />}
-      <div className="flex flex-1 flex-col">
-        {/* Top navbar */}
-        <div className="flex h-12 items-center justify-between border-b border-zinc-800 px-4 text-sm">
-          <div className="font-semibold">Hit</div>
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => router.push('/help')}>
-              Guide
-            </Button>
-            <div className="text-zinc-400">
-              {clerkUser?.emailAddresses?.[0]?.emailAddress ||
-                user?.email ||
-                ''}
-            </div>
-          </div>
+    <div className="bg-background min-h-screen">
+      {isLoadSidebar && (
+        <div className="flex">
+          <AppSidebar />
+          <main className="bg-background flex-1 p-6">{children}</main>
         </div>
-        <div className="h-[calc(100vh-48px)] flex-1 overflow-auto">
+      )}
+      {!isLoadSidebar && (
+        <div className="bg-background h-screen flex-1 overflow-auto">
           {children}
         </div>
-      </div>
+      )}
     </div>
   )
 }

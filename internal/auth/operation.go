@@ -9,33 +9,33 @@ import (
 )
 
 func Login() {
-	session, err := apis.CreateSessionApi()
+	sessionApiBody, err := apis.CreateSessionApi()
 	if err != nil {
 		fmt.Println("Error in Generating Session:", err)
 		return
 	}
 
-	url := fmt.Sprintf("%s/terminal?token=%s", utils.FRONTEND_URL, session.Token)
+	url := fmt.Sprintf("%s/terminal?token=%s", utils.FRONTEND_URL, sessionApiBody.Data.Token)
 	fmt.Println("Opening browser:", url)
 	utils.OpenBrowser(url)
 
 	timeout := 5 * time.Minute
 	endTime := time.Now().Add(timeout)
-	sessionId := session.SessionId
+	sessionId := sessionApiBody.Data.SessionId
 
 	for time.Now().Before((endTime)) {
 		time.Sleep(3 * time.Second)
 
-		data, err := apis.CheckSessionApi(sessionId)
+		checkSessionApiBody, err := apis.CheckSessionApi(sessionId)
 		if err != nil {
 			continue
 		}
 
-		switch data.Valid {
+		switch checkSessionApiBody.Data.Valid {
 		case "active":
-			if data.Token != "" {
-				utils.SetSession(data.Email, data.Token)
-				fmt.Printf("✅ Logged in successfully with email %s\n", data.Email)
+			if checkSessionApiBody.Data.Token != "" {
+				utils.SetSession(checkSessionApiBody.Data.Email, checkSessionApiBody.Data.Token)
+				fmt.Printf("✅ Logged in successfully with email %s\n", checkSessionApiBody.Data.Email)
 				return
 			} else {
 				fmt.Println("⚠️ Try again later")

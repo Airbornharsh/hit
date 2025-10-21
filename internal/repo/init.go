@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
 )
 
@@ -60,7 +61,7 @@ func InitializeIndex() {
 	}
 
 	// Create index structure
-	index := &Index{
+	index := &go_types.Index{
 		Entries: make(map[string]string),
 		Changed: false,
 	}

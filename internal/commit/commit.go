@@ -7,18 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/repo"
 	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/airbornharsh/hit/utils"
 )
-
-type Commit struct {
-	Tree      string    `json:"tree"`
-	Parent    string    `json:"parent"`
-	Message   string    `json:"message"`
-	Author    string    `json:"author"`
-	Timestamp time.Time `json:"timestamp"`
-}
 
 const (
 	parentFilePath    = ".hit/refs/heads/master"
@@ -34,7 +27,7 @@ func CreateCommit(message string) (string, error) {
 	parentFile, _ := os.ReadFile(parentFilePath)
 	parentLogFile, _ := os.ReadFile(parentLogFilePath)
 
-	commit := Commit{
+	commit := go_types.Commit{
 		Tree:      stagedTreeHash,
 		Parent:    string(parentFile),
 		Message:   message,
@@ -42,7 +35,7 @@ func CreateCommit(message string) (string, error) {
 		Timestamp: time.Now(),
 	}
 
-	var commits []Commit
+	var commits []go_types.Commit
 
 	json.Unmarshal(parentLogFile, &commits)
 
@@ -72,7 +65,7 @@ func LogCommits() {
 
 	logPath := filepath.Join(".hit", "logs", head)
 
-	var commits []Commit
+	var commits []go_types.Commit
 	logFile, err := os.ReadFile(logPath)
 	if err != nil {
 		fmt.Println("No commits found")
@@ -109,7 +102,7 @@ func ShowCommit(hash string) {
 		return
 	}
 
-	var tree repo.Tree
+	var tree go_types.Tree
 	if err := json.Unmarshal([]byte(commitData), &tree); err != nil {
 		fmt.Println("Error parsing tree:", err)
 		return
@@ -134,7 +127,7 @@ func ShowCommit(hash string) {
 		return
 	}
 
-	var parentTree repo.Tree
+	var parentTree go_types.Tree
 	if err := json.Unmarshal([]byte(parentCommitData), &parentTree); err != nil {
 		fmt.Println("Error parsing parent tree:", err)
 		return
@@ -202,7 +195,7 @@ func ShowCommitExpanded(hash string) {
 		return
 	}
 
-	var tree repo.Tree
+	var tree go_types.Tree
 	if err := json.Unmarshal([]byte(commitData), &tree); err != nil {
 		fmt.Println("Error parsing tree:", err)
 		return
@@ -231,7 +224,7 @@ func ShowCommitExpanded(hash string) {
 		return
 	}
 
-	var parentTree repo.Tree
+	var parentTree go_types.Tree
 	if err := json.Unmarshal([]byte(parentCommitData), &parentTree); err != nil {
 		fmt.Println("Error parsing parent tree:", err)
 		return

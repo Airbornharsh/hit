@@ -3,6 +3,7 @@ import { User } from '@/types/auth'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { getTerminalToken } from '@/utils/session'
+import { useRepoStore } from './repoStore'
 
 interface AuthState {
   isUserLoaded: boolean
@@ -19,6 +20,7 @@ interface AuthState {
   setToken: (token: string | null) => void
   setIsAuthenticated: (isAuthenticated: boolean) => void
   getUser: () => Promise<void>
+  updateUsername: (username: string) => Promise<boolean>
   logout: () => void
   completeTerminalSession: () => Promise<void>
   checkLocalTerminalSession: () => boolean
@@ -57,11 +59,12 @@ export const useAuthStore = create<AuthState>()(
           const data = response.data.data.user
           const newUser: User = {
             _id: data._id,
-            name: get().user?.name || '',
-            clerkId: get().user?.clerkId || '',
-            email: get().user?.email || '',
+            name: data.name || '',
+            clerkId: data.clerkId || '',
+            email: data.email || '',
             admin: data.admin,
             provider: data.provider || 'email',
+            username: data.username,
           }
           set({
             user: newUser,
@@ -70,6 +73,26 @@ export const useAuthStore = create<AuthState>()(
           console.error('Error fetching user:', error)
         } finally {
           set({ isUserLoaded: true })
+        }
+      },
+
+      updateUsername: async (username: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          await AxiosClient.patch('/api/v1/auth/user/username', {
+            username,
+          })
+          const updatedUser: User = { ...get().user, username } as User
+          set({ user: updatedUser })
+          return true
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (error: any) {
+          const errorMessage =
+            error?.response?.data?.message || 'Failed to update username'
+          set({ error: errorMessage })
+          return false
+        } finally {
+          set({ isLoading: false })
         }
       },
 

@@ -1,4 +1,6 @@
 test_hit/
+.hit_test/
+hit_command
 
 node_modules/
 dist/

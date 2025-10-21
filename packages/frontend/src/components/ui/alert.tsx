@@ -1,35 +1,35 @@
-import * as React from 'react'
-import { cva, type VariantProps } from 'class-variance-authority'
-
+import React from 'react'
 import { cn } from '@/lib/utils'
-
-const alertVariants = cva(
-  'relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground',
-  {
-    variants: {
-      variant: {
-        default: 'bg-background text-foreground',
-        destructive:
-          'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-    },
-  },
-)
+import { AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react'
 
 const Alert = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
->(({ className, variant, ...props }, ref) => (
-  <div
-    ref={ref}
-    role="alert"
-    className={cn(alertVariants({ variant }), className)}
-    {...props}
-  />
-))
+  React.HTMLAttributes<HTMLDivElement> & {
+    variant?: 'default' | 'destructive' | 'success' | 'warning'
+  }
+>(({ className, variant = 'default', ...props }, ref) => {
+  const variants = {
+    default: 'bg-background text-foreground border-border',
+    destructive: 'bg-destructive/10 text-destructive border-destructive/20',
+    success:
+      'bg-green-50 text-green-800 border-green-200 dark:bg-green-900/10 dark:text-green-400 dark:border-green-800',
+    warning:
+      'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-400 dark:border-yellow-800',
+  }
+
+  return (
+    <div
+      ref={ref}
+      role="alert"
+      className={cn(
+        'relative w-full rounded-lg border p-4',
+        variants[variant],
+        className,
+      )}
+      {...props}
+    />
+  )
+})
 Alert.displayName = 'Alert'
 
 const AlertTitle = React.forwardRef<
@@ -56,4 +56,31 @@ const AlertDescription = React.forwardRef<
 ))
 AlertDescription.displayName = 'AlertDescription'
 
-export { Alert, AlertTitle, AlertDescription }
+const AlertIcon = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & {
+    variant?: 'default' | 'destructive' | 'success' | 'warning'
+  }
+>(({ className, variant = 'default', ...props }, ref) => {
+  const icons = {
+    default: Info,
+    destructive: AlertCircle,
+    success: CheckCircle,
+    warning: AlertTriangle,
+  }
+
+  const Icon = icons[variant]
+
+  return (
+    <div
+      ref={ref}
+      className={cn('flex items-center gap-2', className)}
+      {...props}
+    >
+      <Icon className="h-4 w-4" />
+    </div>
+  )
+})
+AlertIcon.displayName = 'AlertIcon'
+
+export { Alert, AlertTitle, AlertDescription, AlertIcon }

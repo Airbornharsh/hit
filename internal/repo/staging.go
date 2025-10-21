@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
 )
 
@@ -44,11 +45,6 @@ func getRelativePath(absPath string) (string, error) {
 	return relPath, nil
 }
 
-type Index struct {
-	Entries map[string]string `json:"entries"` // file path -> object hash
-	Changed bool              `json:"changed"`
-}
-
 // AddFile reads, hashes, compresses, and stores the file in .hit/objects
 func AddFile(filePath string) (string, error) {
 	absPath, err := filepath.Abs(filePath)
@@ -79,7 +75,7 @@ func AddFile(filePath string) (string, error) {
 	}
 
 	indexFile := filepath.Join(".hit", "index.json")
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 
 	if data, err := os.ReadFile(indexFile); err == nil {
 		json.Unmarshal(data, index)
@@ -119,7 +115,7 @@ func AddAllFile(currentDir string) {
 	}
 
 	indexFile := filepath.Join(".hit", "index.json")
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 	if data, err := os.ReadFile(indexFile); err == nil {
 		json.Unmarshal(data, index)
 	}
@@ -182,7 +178,7 @@ func ResetFile(filePath string) (string, error) {
 
 	indexFile := filepath.Join(".hit", "index.json")
 
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 
 	if data, err := os.ReadFile(indexFile); err == nil {
 		json.Unmarshal(data, index)
@@ -248,7 +244,7 @@ func removeFromIndex(filePath string) {
 	}
 
 	indexFile := filepath.Join(".hit", "index.json")
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 
 	if data, err := os.ReadFile(indexFile); err == nil {
 		json.Unmarshal(data, index)

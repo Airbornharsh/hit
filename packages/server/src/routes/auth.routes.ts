@@ -6,6 +6,11 @@ import type { Router } from 'express'
 const router: Router = express.Router()
 
 router.get('/user', Middleware.authMiddleware, AuthController.getUser)
+router.patch(
+  '/user/username',
+  Middleware.authMiddleware,
+  AuthController.updateUsername,
+)
 router.post('/session', AuthController.createTerminalSession)
 router.post(
   '/session/:token',

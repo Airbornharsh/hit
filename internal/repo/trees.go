@@ -8,14 +8,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/airbornharsh/hit/utils"
 )
-
-type Tree struct {
-	Entries map[string]string `json:"entries"` // file path -> object hash
-	Parent  string            `json:"parent"`
-}
 
 var ErrNoStagedChanges = errors.New("no staged changes to commit")
 
@@ -32,7 +28,7 @@ func BuildTreeFromStage() (string, error) {
 	}
 
 	indexFile := filepath.Join(repoRoot, ".hit", "index.json")
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 
 	if data, err := os.ReadFile(indexFile); err == nil {
 		json.Unmarshal(data, index)
@@ -48,7 +44,7 @@ func BuildTreeFromStage() (string, error) {
 		return buildEmptyTree()
 	}
 
-	rootTree := &Tree{Entries: make(map[string]string)}
+	rootTree := &go_types.Tree{Entries: make(map[string]string)}
 
 	for relativePath, hash := range index.Entries {
 		normalizedPath := filepath.ToSlash(relativePath)
@@ -64,11 +60,11 @@ func BuildTreeFromStage() (string, error) {
 }
 
 func buildEmptyTree() (string, error) {
-	emptyTree := &Tree{Entries: make(map[string]string), Parent: ""}
+	emptyTree := &go_types.Tree{Entries: make(map[string]string), Parent: ""}
 	return storeTree(emptyTree)
 }
 
-func storeTree(tree *Tree) (string, error) {
+func storeTree(tree *go_types.Tree) (string, error) {
 	data, err := json.Marshal(tree)
 	if err != nil {
 		return "", err

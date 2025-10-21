@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/airbornharsh/hit/utils"
 )
@@ -19,7 +20,7 @@ func DiffWorkingVsIndex() {
 	}
 
 	indexPath := filepath.Join(repoRoot, ".hit", "index.json")
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 	if data, err := os.ReadFile(indexPath); err == nil {
 		_ = json.Unmarshal(data, index)
 	}
@@ -84,7 +85,7 @@ func DiffIndexVsHead() {
 	}
 
 	indexPath := filepath.Join(repoRoot, ".hit", "index.json")
-	index := &Index{Entries: make(map[string]string)}
+	index := &go_types.Index{Entries: make(map[string]string)}
 	if data, err := os.ReadFile(indexPath); err == nil {
 		_ = json.Unmarshal(data, index)
 	}
@@ -94,7 +95,7 @@ func DiffIndexVsHead() {
 	if headHash != "" && headHash != "0000000000000000000000000000000000000000" {
 		obj, err := storage.LoadObject(headHash)
 		if err == nil {
-			var tree Tree
+			var tree go_types.Tree
 			if err := json.Unmarshal([]byte(obj), &tree); err == nil {
 				for rel, h := range tree.Entries {
 					headEntries[filepath.ToSlash(rel)] = h

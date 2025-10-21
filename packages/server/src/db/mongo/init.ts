@@ -6,6 +6,9 @@ import UserSchema, { IUser } from './models/User.schema'
 import TerminalSessionSchema, {
   ITerminalSession,
 } from './models/Session.schema'
+import RepoSchema, { IRepo } from './models/Repo.schema'
+import BranchSchema, { IBranch } from './models/Branch.schema'
+import CommitSchema, { ICommit } from './models/Commit.schema'
 
 mongoose.set('strictQuery', false)
 
@@ -15,6 +18,9 @@ let db: Db | null = null
 interface Db {
   UserModel: Model<IUser>
   TerminalSessionModel: Model<ITerminalSession>
+  RepoModel: Model<IRepo>
+  BranchModel: Model<IBranch>
+  CommitModel: Model<ICommit>
 }
 
 const connectDB = async () => {
@@ -30,10 +36,16 @@ const connectDB = async () => {
       'TerminalSession',
       TerminalSessionSchema,
     )
+    const RepoModel = dbConnection.model<IRepo>('Repo', RepoSchema)
+    const BranchModel = dbConnection.model<IBranch>('Branch', BranchSchema)
+    const CommitModel = dbConnection.model<ICommit>('Commit', CommitSchema)
 
     db = {
       UserModel,
       TerminalSessionModel,
+      RepoModel,
+      BranchModel,
+      CommitModel,
     }
   } catch (error: any) {
     console.log(error)

@@ -5,4 +5,5 @@ export interface User {
   admin?: boolean
   clerkId?: string
   provider: 'google' | 'email'
+  username?: string
 }

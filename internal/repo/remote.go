@@ -6,16 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/airbornharsh/hit/internal/go_types"
 )
-
-type Remote struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-type RemoteConfig struct {
-	Remotes map[string]Remote `json:"remotes"`
-}
 
 func AddRemote(name, url string) error {
 	if name == "" {
@@ -35,7 +28,7 @@ func AddRemote(name, url string) error {
 		return fmt.Errorf("remote '%s' already exists", name)
 	}
 
-	remotes.Remotes[name] = Remote{
+	remotes.Remotes[name] = go_types.Remote{
 		Name: name,
 		URL:  url,
 	}
@@ -90,12 +83,12 @@ func GetRemoteURL(name string) (string, error) {
 	return remote.URL, nil
 }
 
-func loadRemotes() (*RemoteConfig, error) {
+func loadRemotes() (*go_types.RemoteConfig, error) {
 	configPath := filepath.Join(".hit", "config")
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return &RemoteConfig{
-			Remotes: make(map[string]Remote),
+		return &go_types.RemoteConfig{
+			Remotes: make(map[string]go_types.Remote),
 		}, nil
 	}
 
@@ -104,19 +97,19 @@ func loadRemotes() (*RemoteConfig, error) {
 		return nil, err
 	}
 
-	var config RemoteConfig
+	var config go_types.RemoteConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
 
 	if config.Remotes == nil {
-		config.Remotes = make(map[string]Remote)
+		config.Remotes = make(map[string]go_types.Remote)
 	}
 
 	return &config, nil
 }
 
-func saveRemotes(config *RemoteConfig) error {
+func saveRemotes(config *go_types.RemoteConfig) error {
 	configPath := filepath.Join(".hit", "config")
 
 	data, err := json.Marshal(config)
@@ -147,4 +140,12 @@ func isValidRemoteURL(url string) bool {
 	}
 
 	return false
+}
+
+func RemoveRemoteFiles(remoteName string) {
+	logRemoteDir := filepath.Join(".hit", "logs", "refs", "remotes", remoteName)
+	os.RemoveAll(logRemoteDir)
+
+	remoteDir := filepath.Join(".hit", "refs", "remotes", remoteName)
+	os.RemoveAll(remoteDir)
 }
