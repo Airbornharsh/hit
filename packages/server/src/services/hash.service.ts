@@ -31,7 +31,14 @@ class HashService {
       }
     }
 
-    return Array.from(fileMap.values())
+    const result = Array.from(fileMap.values())
+    result.sort((a, b) => {
+      if (a.type === 'directory' && b.type !== 'directory') return -1
+      if (a.type !== 'directory' && b.type === 'directory') return 1
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+    })
+
+    return result
   }
 
   static async getFiles(hash: string, path: string) {
@@ -50,7 +57,6 @@ class HashService {
     const entries = Object.keys(treeData.entries || {})
     const lastModified = treeData.lastModified || new Date().toISOString()
 
-    // If path is empty, return root files
     if (!path) {
       for (const name of entries) {
         const parts = name.split('/')
@@ -86,7 +92,14 @@ class HashService {
       }
     }
 
-    return Array.from(fileMap.values())
+    const result = Array.from(fileMap.values())
+    result.sort((a, b) => {
+      if (a.type === 'directory' && b.type !== 'directory') return -1
+      if (a.type !== 'directory' && b.type === 'directory') return 1
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+    })
+
+    return result
   }
 
   static async getFile(hash: string, path: string) {
