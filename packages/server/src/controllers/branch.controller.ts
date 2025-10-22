@@ -97,9 +97,14 @@ class BranchController {
         message: 'Branches fetched successfully',
         data: {
           branches,
-          total: total || 0,
-          page: Number(page),
-          limit: Number(limit),
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total: total || 0,
+            totalPages: Math.ceil(total || 0 / Number(limit)),
+            hasNext: Number(page) < Math.ceil(total || 0 / Number(limit)),
+            hasPrev: Number(page) > 1,
+          },
         },
       })
     } catch (error) {
@@ -285,6 +290,55 @@ class BranchController {
       res.status(500).json({
         success: false,
         message: 'Failed to create commit',
+      })
+      return
+    }
+  }
+
+  static async getCommits(req: Request, res: Response) {
+    try {
+      const { branchName } = req.params
+      const {
+        remote,
+        page,
+        limit,
+        sortBy,
+        sortOrder,
+        author,
+        startDate,
+        endDate,
+      } = req.query
+
+      const paginationParams = {
+        page: page ? parseInt(page as string) : undefined,
+        limit: limit ? parseInt(limit as string) : undefined,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as 'asc' | 'desc',
+        author: author as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+      }
+
+      const commits = await CommitService.getCommits(
+        remote as string,
+        branchName,
+        paginationParams,
+      )
+
+      res.json({
+        success: true,
+        message: 'Commits fetched successfully',
+        data: {
+          commits: commits.commits,
+          users: commits.users,
+          pagination: commits.pagination,
+        },
+      })
+    } catch (error) {
+      console.error('Get commits error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch commits',
       })
       return
     }

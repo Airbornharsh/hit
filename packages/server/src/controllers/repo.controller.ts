@@ -121,9 +121,14 @@ class RepoController {
         message: 'Repos fetched successfully',
         data: {
           repos,
-          total: total || 0,
-          page: Number(page),
-          limit: Number(limit),
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total: total || 0,
+            totalPages: Math.ceil(total || 0 / Number(limit)),
+            hasNext: Number(page) < Math.ceil(total || 0 / Number(limit)),
+            hasPrev: Number(page) > 1,
+          },
         },
       })
     } catch (error) {
@@ -149,6 +154,7 @@ class RepoController {
         message: 'Repo fetched successfully',
         data: {
           repo: repoDetails.repo,
+          totalCommits: repoDetails.totalCommits,
           branches: repoDetails.branches,
           files: repoDetails.files,
         },

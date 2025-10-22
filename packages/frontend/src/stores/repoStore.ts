@@ -70,6 +70,7 @@ interface RepoState {
   branchesPagination: PaginationMeta | null
 
   // Commits
+  totalCommits: number
   commits: Commit[]
   activeCommit: Commit | null
   isCommitsLoading: boolean
@@ -107,7 +108,11 @@ interface RepoState {
   fetchCommits: (
     repoName: string,
     branchName: string,
-    params?: PaginationParams,
+    params?: PaginationParams & {
+      author?: string
+      startDate?: string
+      endDate?: string
+    },
   ) => Promise<void>
   fetchCommit: (
     repoName: string,
@@ -177,6 +182,7 @@ export const useRepoStore = create<RepoState>()(
       branchesError: null,
       branchesPagination: null,
 
+      totalCommits: 0,
       commits: [],
       activeCommit: null,
       isCommitsLoading: false,
@@ -226,7 +232,7 @@ export const useRepoStore = create<RepoState>()(
 
           set({
             repos: response.data.data.repos,
-            reposPagination: response.data.meta || null,
+            reposPagination: response.data.data.pagination || null,
           })
         } catch (error: unknown) {
           const errorMessage =
@@ -252,6 +258,7 @@ export const useRepoStore = create<RepoState>()(
           )
           const repo = response.data.data.repo
           const branches = response.data.data.branches
+          const totalCommits = response.data.data.totalCommits || 0
           const files = response.data.data.files as {
             name: string
             type: 'file' | 'directory'
@@ -260,6 +267,7 @@ export const useRepoStore = create<RepoState>()(
           set({
             activeRepo: repo,
             branches,
+            totalCommits,
             files: {
               path: '',
               current: files,
@@ -339,7 +347,7 @@ export const useRepoStore = create<RepoState>()(
 
           set({
             branches: response.data.data.branches,
-            branchesPagination: response.data.meta || null,
+            branchesPagination: response.data.data.pagination || null,
           })
         } catch (error: unknown) {
           const errorMessage =
@@ -375,7 +383,11 @@ export const useRepoStore = create<RepoState>()(
       fetchCommits: async (
         repoName: string,
         branchName: string,
-        params?: PaginationParams,
+        params?: PaginationParams & {
+          author?: string
+          startDate?: string
+          endDate?: string
+        },
       ) => {
         set({ isCommitsLoading: true, commitsError: null })
         try {
@@ -390,13 +402,18 @@ export const useRepoStore = create<RepoState>()(
           if (params?.sortBy) queryParams.append('sortBy', params.sortBy)
           if (params?.sortOrder)
             queryParams.append('sortOrder', params.sortOrder)
+          if (params?.author && params.author !== 'all')
+            queryParams.append('author', params.author)
+          if (params?.startDate)
+            queryParams.append('startDate', params.startDate)
+          if (params?.endDate) queryParams.append('endDate', params.endDate)
 
           const url = `/api/v1/branch/${branchName}/commits${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
           const response = await AxiosClient.get(url)
 
           set({
             commits: response.data.data.commits,
-            commitsPagination: response.data.meta || null,
+            commitsPagination: response.data.data.pagination || null,
           })
         } catch (error: unknown) {
           const errorMessage =

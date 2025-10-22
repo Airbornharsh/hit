@@ -9,6 +9,7 @@ class RepoService {
     branchName?: string,
   ): Promise<{
     repo: Partial<IRepo>
+    totalCommits: number
     branches: string[]
     files: {
       name: string
@@ -81,6 +82,7 @@ class RepoService {
       type: 'file' | 'directory'
       lastModified: string
     }[] = []
+    let totalCommits = 0
     if (branchName) {
       const branch = repoData[0].branches.find(
         (branch: any) => branch.name === branchName,
@@ -97,9 +99,20 @@ class RepoService {
       }
 
       files = await HashService.getRootFiles(latestCommit.hash)
+
+      totalCommits =
+        (await db?.CommitModel.countDocuments({
+          repoId: repo._id,
+          branchId: branch._id,
+        })) || 0
     } else {
       if (defaultBranchCommit && defaultBranchCommit.hash) {
         files = await HashService.getRootFiles(defaultBranchCommit.hash)
+        totalCommits =
+          (await db?.CommitModel.countDocuments({
+            repoId: repo._id,
+            branchId: repo.defaultBranch,
+          })) || 0
       }
     }
 
@@ -113,6 +126,7 @@ class RepoService {
         createdAt: repo.createdAt,
         updatedAt: repo.updatedAt,
       },
+      totalCommits,
       branches: repo.branches || [],
       files,
     }
