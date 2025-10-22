@@ -110,7 +110,7 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
 
       <RepositoryHeader
         repo={activeRepo}
-        activeBranch={branchName}
+        activeBranch={branchName || activeBranch?.name || null}
         onBranchSelect={handleBranchSelect}
       />
       {/* <RepositoryTabs repoName={repoName} userName={userName} /> */}

@@ -346,45 +346,38 @@ class BranchController {
 
   static async getCommit(req: Request, res: Response) {
     try {
-      const { branchName, commitHash } = req.params
-      const branch = await db?.BranchModel.findOne({
-        name: branchName,
-      }).lean()
+      const { commitHash } = req.params
+      const { remote } = req.query
 
-      if (!branch || !branch?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch branch',
-        })
-        return
-      }
-
-      const commit = await db?.CommitModel.findOne({
-        branchId: branch._id,
-        hash: commitHash,
-      }).lean()
-
-      if (!commit || !commit?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch commit',
-        })
-        return
-      }
+      const commitDetails = await CommitService.getCommitDetails(
+        remote as string,
+        commitHash,
+      )
 
       res.json({
         success: true,
         message: 'Commit fetched successfully',
         data: {
-          commit,
+          commit: commitDetails.commit,
+          files: commitDetails.files,
+          stats: commitDetails.stats,
         },
       })
     } catch (error) {
       console.error('Get commit error:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch commit',
-      })
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error'
+      if (errorMessage.includes('not found')) {
+        res.status(404).json({
+          success: false,
+          message: errorMessage,
+        })
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to fetch commit',
+        })
+      }
       return
     }
   }

@@ -1,7 +1,9 @@
+import * as diff from 'diff'
 import { db } from '../db/mongo/init'
-import { ICommit } from '../db/mongo/models/Commit.schema'
 import { PaginationMeta, PaginationParams } from '../types/common'
+import HashService from './hash.service'
 import RemoteService from './remote.service'
+import ZlibService from './zlib.service'
 
 class CommitService {
   static async createCommits(
@@ -184,6 +186,228 @@ class CommitService {
         hasNext: page < Math.ceil(total || 0 / limit),
         hasPrev: page > 1,
       },
+    }
+  }
+
+  static async getCommitDetails(
+    remote: string,
+    commitHash: string,
+  ): Promise<{
+    commit: any
+    files: {
+      name: string
+      status: 'added' | 'modified' | 'deleted'
+      additions: number
+      deletions: number
+      changes: number
+      beforeCode?: string
+      afterCode?: string
+    }[]
+    stats: {
+      total: number
+      additions: number
+      deletions: number
+    }
+  }> {
+    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
+
+    const userId = await db?.UserModel.findOne({
+      username: userName,
+    }).lean()
+
+    if (!userId || !userId?._id) {
+      throw new Error('User not found')
+    }
+
+    const repo = await db?.RepoModel.findOne({
+      userId: userId._id,
+      name: repoName,
+    }).lean()
+
+    if (!repo || !repo?._id) {
+      throw new Error('Repo not found')
+    }
+
+    const commit = await db?.CommitModel.findOne({
+      hash: commitHash,
+      repoId: repo._id,
+    }).lean()
+
+    if (!commit || !commit?._id || commit.hash !== commitHash) {
+      throw new Error('Commit not found')
+    }
+
+    const parentCommit = await db?.CommitModel.findOne({
+      repoId: repo._id,
+      hash: commit.parent,
+    }).lean()
+
+    if (
+      commit.parent !== '0000000000000000000000000000000000000000' &&
+      (!parentCommit || !parentCommit?._id)
+    ) {
+      throw new Error('Parent commit not found')
+    }
+
+    let files: Map<
+      string,
+      {
+        name: string
+        hash: string
+        status: 'added' | 'modified' | 'deleted'
+        additions: number
+        deletions: number
+        changes: number
+        beforeCode?: string | null
+        afterCode?: string | null
+      }
+    > = new Map()
+
+    const [beforeFiles, afterFiles] = await Promise.all([
+      parentCommit
+        ? HashService.getFilesMap(parentCommit.hash)
+        : Promise.resolve(
+            new Map<
+              string,
+              { name: string; hash: string; lastModified: string }
+            >(),
+          ),
+      HashService.getFilesMap(commit.hash),
+    ])
+
+    for (const file of beforeFiles.values()) {
+      if (!afterFiles.has(file.name)) {
+        files.set(file.name, {
+          name: file.name,
+          hash: file.hash,
+          status: 'deleted',
+          additions: 0,
+          deletions: 1,
+          changes: 0,
+          beforeCode: null,
+          afterCode: null,
+        })
+      } else {
+        if (afterFiles.get(file.name)?.hash !== file.hash) {
+          files.set(file.name, {
+            name: file.name,
+            hash: file.hash,
+            status: 'modified',
+            additions: 0,
+            deletions: 0,
+            changes: 1,
+            beforeCode: null,
+            afterCode: null,
+          })
+        }
+      }
+    }
+
+    for (const file of afterFiles.values()) {
+      if (!beforeFiles.has(file.name)) {
+        files.set(file.name, {
+          name: file.name,
+          hash: file.hash,
+          status: 'added',
+          additions: 1,
+          deletions: 0,
+          changes: 0,
+          beforeCode: null,
+          afterCode: null,
+        })
+      }
+    }
+
+    const chunks = []
+    const chunkSize = 30
+    for (let i = 0; i < files.size; i += chunkSize) {
+      const chunk = Array.from(files.values()).slice(i, i + chunkSize)
+      chunks.push(chunk)
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(
+        chunk.map(async (file) => {
+          let beforeCode = ''
+          let afterCode = ''
+
+          if (file.status === 'deleted') {
+            beforeCode = await ZlibService.decompress(file.hash).catch(() => '')
+          } else if (file.status === 'added') {
+            afterCode = await ZlibService.decompress(file.hash).catch(() => '')
+          } else if (file.status === 'modified') {
+            const beforeFile = beforeFiles.get(file.name)
+            const afterFile = afterFiles.get(file.name)
+
+            if (beforeFile) {
+              beforeCode = await ZlibService.decompress(beforeFile.hash).catch(
+                () => '',
+              )
+            }
+            if (afterFile) {
+              afterCode = await ZlibService.decompress(afterFile.hash).catch(
+                () => '',
+              )
+            }
+          }
+
+          const diffs = diff.diffLines(beforeCode, afterCode)
+
+          let additions = 0
+          let deletions = 0
+
+          for (const change of diffs) {
+            if (change.added) {
+              additions += change.count || 0
+            } else if (change.removed) {
+              deletions += change.count || 0
+            }
+          }
+
+          file.additions = additions
+          file.deletions = deletions
+          file.changes = additions + deletions
+          file.beforeCode = beforeCode || undefined
+          file.afterCode = afterCode || undefined
+        }),
+      )
+    }
+
+    const stats = {
+      total: files.size,
+      additions: Array.from(files.values()).reduce(
+        (sum, file) => sum + file.additions,
+        0,
+      ),
+      deletions: Array.from(files.values()).reduce(
+        (sum, file) => sum + file.deletions,
+        0,
+      ),
+    }
+
+    return {
+      commit: {
+        _id: commit._id.toString(),
+        repoId: commit.repoId.toString(),
+        branchId: commit.branchId.toString(),
+        hash: commit.hash,
+        parent: commit.parent,
+        message: commit.message,
+        author: commit.author,
+        timestamp: commit.timestamp,
+        createdAt: commit.createdAt,
+        updatedAt: commit.updatedAt,
+      },
+      files: Array.from(files.values()).map((file) => ({
+        name: file.name,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        changes: file.changes,
+        beforeCode: file.beforeCode || undefined,
+        afterCode: file.afterCode || undefined,
+      })),
+      stats,
     }
   }
 }

@@ -18,6 +18,7 @@
     "@clerk/express": "^1.7.37",
     "axios": "^1.12.2",
     "cors": "^2.8.5",
+    "diff": "^8.0.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
+    "@types/diff": "^8.0.0",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/ws": "^8.18.1",

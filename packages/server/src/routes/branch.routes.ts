@@ -13,6 +13,7 @@ router.get('/:branchName/head-commit', BranchController.getHeadCommit)
 router.post('/:branchName/commits', BranchController.createCommit)
 router.get('/:branchName/commits', BranchController.getCommits)
 router.get('/:branchName/commits/:commitHash', BranchController.getCommit)
+router.get('/commits/:commitHash', BranchController.getCommit)
 router.get('/:branchName/files', BranchController.getFiles)
 router.get('/:branchName/file', BranchController.getFile)
 router.get(

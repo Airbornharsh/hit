@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, use, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useRepoStore } from '@/stores/repoStore'
 import { BranchSelector } from '@/components/repository/BranchSelector'
 import { CommitsFilter } from '@/components/CommitsFilter'
@@ -8,9 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { GitCommit, Copy, Check, ChevronRight } from 'lucide-react'
+import { GitCommit, Copy, Check, ChevronRight, ChevronLeft } from 'lucide-react'
 import { Commit, Branch } from '@/types/repo'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
 interface CommitsPageProps {
   params: Promise<{
@@ -32,6 +34,7 @@ interface CommitsByDate {
 
 export default function CommitsPage({ params }: CommitsPageProps) {
   const { userName, repoName, branchName } = use(params)
+  const router = useRouter()
 
   const {
     commits,
@@ -76,12 +79,10 @@ export default function CommitsPage({ params }: CommitsPageProps) {
       sortOrder: 'desc',
     }
 
-    // Add author filter
     if (userFilter !== 'all') {
       params.author = userFilter
     }
 
-    // Add date range filter based on time filter
     if (timeFilter !== 'all') {
       const now = new Date()
       let startDate: Date
@@ -124,7 +125,6 @@ export default function CommitsPage({ params }: CommitsPageProps) {
     }
   }, [repoName, fetchBranches])
 
-  // Group commits by date (now using server-filtered commits)
   useEffect(() => {
     if (commits.length > 0) {
       const grouped: CommitsByDate = {}
@@ -204,7 +204,6 @@ export default function CommitsPage({ params }: CommitsPageProps) {
     return (
       <div className="h-full overflow-auto p-6">
         <div className="space-y-6">
-          {/* Header skeleton */}
           <div className="flex items-center justify-between">
             <div className="space-y-2">
               <Skeleton className="h-8 w-32" />
@@ -216,7 +215,6 @@ export default function CommitsPage({ params }: CommitsPageProps) {
             </div>
           </div>
 
-          {/* Commits skeleton */}
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
@@ -269,10 +267,18 @@ export default function CommitsPage({ params }: CommitsPageProps) {
   return (
     <div className="h-full overflow-auto p-6">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="space-y-2">
-            <h1 className="text-foreground text-3xl font-bold">Commits</h1>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/${userName}/${repoName}`}
+                className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Link>
+              <h1 className="text-foreground text-3xl font-bold">Commits</h1>
+            </div>
             <div className="flex items-center gap-4">
               <BranchSelector
                 repoName={repoName}
@@ -288,7 +294,6 @@ export default function CommitsPage({ params }: CommitsPageProps) {
           </div>
         </div>
 
-        {/* Commits by date */}
         {Object.keys(commitsByDate).length === 0 ? (
           <div className="py-12 text-center">
             <div className="text-muted-foreground mb-4">
@@ -305,14 +310,12 @@ export default function CommitsPage({ params }: CommitsPageProps) {
           <div className="space-y-8">
             {Object.entries(commitsByDate).map(([date, dateCommits]) => (
               <div key={date} className="space-y-4">
-                {/* Date header */}
                 <div className="flex items-center gap-3">
                   <h2 className="text-foreground text-lg font-semibold">
                     Commits on {date}
                   </h2>
                 </div>
 
-                {/* Commits for this date */}
                 <div className="ml-4 space-y-1">
                   {dateCommits.map((commit, index) => (
                     <div
@@ -330,7 +333,6 @@ export default function CommitsPage({ params }: CommitsPageProps) {
                             </h3>
                             <div className="text-muted-foreground mt-2 flex items-center gap-4 text-sm">
                               <div className="flex items-center gap-2">
-                                {/* <div className="bg-muted h-6 w-6 rounded-full"></div> */}
                                 <span>{commit.author}</span>
                               </div>
                               <span>{formatCommitTime(commit.timestamp)}</span>
@@ -358,6 +360,11 @@ export default function CommitsPage({ params }: CommitsPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() =>
+                            router.push(
+                              `/${userName}/${repoName}/commit/${commit.hash}`,
+                            )
+                          }
                           className="h-8 w-8 p-0"
                         >
                           <ChevronRight className="h-4 w-4" />
@@ -371,7 +378,6 @@ export default function CommitsPage({ params }: CommitsPageProps) {
           </div>
         )}
 
-        {/* Pagination */}
         {commitsPagination &&
           (commitsPagination.hasNext || commitsPagination.hasPrev) && (
             <div className="flex items-center justify-center gap-4">

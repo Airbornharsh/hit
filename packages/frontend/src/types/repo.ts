@@ -31,6 +31,29 @@ export interface Commit {
   updatedAt: string
 }
 
+export interface CommitFile {
+  name: string
+  type: 'file' | 'directory'
+  status: 'added' | 'modified' | 'deleted'
+  additions: number
+  deletions: number
+  changes: number
+  beforeCode?: string
+  afterCode?: string
+}
+
+export interface CommitStats {
+  total: number
+  additions: number
+  deletions: number
+}
+
+export interface CommitDetails {
+  commit: Commit
+  files: CommitFile[]
+  stats: CommitStats
+}
+
 export interface CreateRepoData {
   name: string
   description?: string

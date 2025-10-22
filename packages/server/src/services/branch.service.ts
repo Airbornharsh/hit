@@ -63,7 +63,7 @@ class BranchService {
     }
 
     try {
-      const files = await HashService.getFiles(headCommit.hash, path)
+      const files = (await HashService.getFiles(headCommit.hash, path)) as any[]
 
       return {
         files: files.map((file) => ({

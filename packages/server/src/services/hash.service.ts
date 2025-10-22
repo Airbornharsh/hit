@@ -41,6 +41,35 @@ class HashService {
     return result
   }
 
+  static async getFilesMap(hash: string) {
+    const tree = await ZlibService.decompress(hash)
+    const treeData = JSON.parse(tree)
+
+    const fileMap = new Map<
+      string,
+      {
+        name: string
+        hash: string
+        lastModified: string
+      }
+    >()
+
+    const entries = Object.keys(treeData.entries || {})
+    const lastModified = treeData.lastModified || new Date().toISOString()
+
+    for (const name of entries) {
+      if (!fileMap.has(name)) {
+        fileMap.set(name, {
+          name: name,
+          hash: treeData.entries[name],
+          lastModified,
+        })
+      }
+    }
+
+    return fileMap
+  }
+
   static async getFiles(hash: string, path: string) {
     const tree = await ZlibService.decompress(hash)
     const treeData = JSON.parse(tree)
@@ -72,7 +101,6 @@ class HashService {
         }
       }
     } else {
-      // Filter entries that start with the given path
       const pathPrefix = path.endsWith('/') ? path : `${path}/`
       for (const name of entries) {
         if (name.startsWith(pathPrefix)) {
@@ -106,7 +134,6 @@ class HashService {
     const tree = await ZlibService.decompress(hash)
     const treeData = JSON.parse(tree)
 
-    // Find the file hash for the given path
     const fileHash = treeData.entries[path]
 
     if (!fileHash) {
@@ -202,7 +229,6 @@ class HashService {
     return rootNodes
   }
 
-  // Alternative simpler implementation
   static async getSimpleTreeStructure(hash: string): Promise<
     {
       name: string

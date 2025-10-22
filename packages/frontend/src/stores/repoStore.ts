@@ -3,6 +3,7 @@ import {
   Repo,
   Branch,
   Commit,
+  CommitDetails,
   CreateRepoData,
   PaginationParams,
   PaginationMeta,
@@ -73,6 +74,7 @@ interface RepoState {
   totalCommits: number
   commits: Commit[]
   activeCommit: Commit | null
+  commitDetails: CommitDetails | null
   isCommitsLoading: boolean
   commitsError: string | null
   commitsPagination: PaginationMeta | null
@@ -119,6 +121,7 @@ interface RepoState {
     branchName: string,
     commitHash: string,
   ) => Promise<void>
+  fetchCommitDetails: (repoName: string, commitHash: string) => Promise<void>
   setCommitsLoading: (loading: boolean) => void
   setCommitsError: (error: string | null) => void
   setCommitsPagination: (pagination: PaginationMeta | null) => void
@@ -185,6 +188,7 @@ export const useRepoStore = create<RepoState>()(
       totalCommits: 0,
       commits: [],
       activeCommit: null,
+      commitDetails: null,
       isCommitsLoading: false,
       commitsError: null,
       commitsPagination: null,
@@ -462,6 +466,31 @@ export const useRepoStore = create<RepoState>()(
 
       setCommitsPagination: (pagination: PaginationMeta | null) => {
         set({ commitsPagination: pagination })
+      },
+
+      fetchCommitDetails: async (repoName: string, commitHash: string) => {
+        set({ isCommitsLoading: true, commitsError: null })
+        try {
+          const { username } = get().metadata
+          if (!username || !repoName) return
+          const remote = constructRemote(username, repoName)
+          const queryParams = new URLSearchParams()
+          queryParams.append('remote', remote)
+
+          const url = `/api/v1/branch/commits/${commitHash}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+          const response = await AxiosClient.get(url)
+
+          set({
+            commitDetails: response.data.data,
+          })
+        } catch (error: unknown) {
+          const errorMessage =
+            (error as ApiError)?.response?.data?.message ||
+            'Failed to fetch commit details'
+          set({ commitsError: errorMessage })
+        } finally {
+          set({ isCommitsLoading: false })
+        }
       },
 
       // Utility actions
