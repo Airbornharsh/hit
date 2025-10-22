@@ -2,6 +2,7 @@ package repo
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -19,6 +20,11 @@ func Push(remoteName, branchName string) error {
 	config, err := utils.GetConfig()
 	if err != nil {
 		return err
+	}
+
+	_, ok := config.Remotes[remoteName]
+	if !ok {
+		return fmt.Errorf("remote %s not found", remoteName)
 	}
 
 	remote := config.Remotes[remoteName].URL

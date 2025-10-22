@@ -1,10 +1,15 @@
 package utils
 
 import (
+	"fmt"
 	"path/filepath"
 )
 
 func HashInfo(hash string) (string, string, string, error) {
+	if len(hash) < 2 {
+		return "", "", "", fmt.Errorf("invalid hash: hash must be at least 2 characters long")
+	}
+
 	rootPath, err := FindRepoRoot()
 	if err != nil {
 		return "", "", "", err

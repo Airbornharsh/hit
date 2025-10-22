@@ -76,7 +76,11 @@ func CreateCommit(remote string, branchName string, commits []go_types.Commit) e
 
 	// any 200 status code is fine
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("failed to create commit: %s", resp.Status)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to create commit: %s", resp.Status)
+		}
+		return fmt.Errorf("failed to create commit: %s", string(body))
 	}
 
 	return nil

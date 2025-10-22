@@ -13,16 +13,19 @@ import (
 	"github.com/airbornharsh/hit/utils"
 )
 
-const (
-	parentFilePath    = ".hit/refs/heads/master"
-	parentLogFilePath = ".hit/logs/refs/heads/master"
-)
-
 func CreateCommit(message string) (string, error) {
 	stagedTreeHash, err := repo.BuildTreeFromStage()
 	if err != nil {
 		return "", err
 	}
+
+	currentBranch, err := utils.GetBranch()
+	if err != nil {
+		return "", err
+	}
+
+	parentFilePath := filepath.Join(".hit", "refs", "heads", currentBranch)
+	parentLogFilePath := filepath.Join(".hit", "logs", "refs", "heads", currentBranch)
 
 	parentFile, _ := os.ReadFile(parentFilePath)
 	parentLogFile, _ := os.ReadFile(parentLogFilePath)
@@ -48,7 +51,7 @@ func CreateCommit(message string) (string, error) {
 		return "", err
 	}
 
-	err = os.WriteFile(".hit/refs/heads/master", []byte(stagedTreeHash), 0644)
+	err = os.WriteFile(filepath.Join(".hit", "refs", "heads", currentBranch), []byte(stagedTreeHash), 0644)
 	if err != nil {
 		return "", err
 	}

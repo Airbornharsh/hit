@@ -37,6 +37,11 @@ func InitRepo() error {
 	headFilePath := filepath.Join(".hit", "HEAD")
 	headRefFilePath := filepath.Join(".hit", "refs", "heads", "master")
 	headLogRefFilePath := filepath.Join(".hit", "logs", "refs", "heads", "master")
+	configFilePath := filepath.Join(".hit", "config")
+	configData := []byte(`{
+		"remotes": {
+		}
+	}`)
 	err := os.WriteFile(headFilePath, []byte("ref: refs/heads/master\n"), 0644)
 	if err != nil {
 		return err
@@ -46,6 +51,10 @@ func InitRepo() error {
 		return err
 	}
 	err = os.WriteFile(headLogRefFilePath, []byte("[]"), 0644)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(configFilePath, configData, 0644)
 	if err != nil {
 		return err
 	}

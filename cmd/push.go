@@ -51,6 +51,9 @@ var pushCmd = &cobra.Command{
 			branchName = currentBranch
 		}
 
+		fmt.Println("Remote Name", remoteName)
+		fmt.Println("Branch Name", branchName)
+
 		if err := repo.Push(remoteName, branchName); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			return

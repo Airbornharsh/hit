@@ -72,7 +72,7 @@ func GetCurrentCommit(branch string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	return strings.TrimSpace(string(data)), nil
 }
 
 func GetConfig() (*go_types.RemoteConfig, error) {

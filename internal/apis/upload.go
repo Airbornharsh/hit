@@ -124,6 +124,5 @@ func UploadAllFiles() error {
 	}()
 
 	wg.Wait()
-	fmt.Println("🚀 All uploads completed successfully.")
 	return err
 }

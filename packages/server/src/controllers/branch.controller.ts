@@ -154,10 +154,13 @@ class BranchController {
       }).lean()
 
       if (!branch || !branch?._id) {
-        console.log('Branch not found')
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch branch',
+        res.status(200).json({
+          success: true,
+          message: 'Branch not found',
+          data: {
+            exists: false,
+            headCommit: null,
+          },
         })
         return
       }
@@ -194,6 +197,7 @@ class BranchController {
   static async createCommit(req: Request, res: Response) {
     try {
       const { branchName } = req.params
+      const { remote } = req.query
       const commits = (req.body.commits || []) as {
         tree: string
         parent: string
@@ -214,8 +218,6 @@ class BranchController {
           return
         }
       }
-
-      const { remote } = req.query
 
       const { userName, repoName } = await RemoteService.remoteBreakdown(
         remote as string,
@@ -249,18 +251,26 @@ class BranchController {
         repoId: repo._id,
       }).lean()
 
-      if (!branch || !branch?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch branch',
+      let branchId = branch?._id.toString()
+      if (!branchId) {
+        const newBranch = await db?.BranchModel.create({
+          repoId: repo._id,
+          name: branchName,
         })
-        return
+        if (!newBranch || !newBranch?._id) {
+          res.status(400).json({
+            success: false,
+            message: 'Failed to create branch',
+          })
+          return
+        }
+        branchId = newBranch._id.toString()
       }
 
       if (commits.length) {
         await CommitService.createCommits(
           repo._id.toString(),
-          branch._id.toString(),
+          branchId,
           commits,
         )
       }
