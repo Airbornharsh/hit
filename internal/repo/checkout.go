@@ -294,3 +294,100 @@ func restoreFileFromObject(filePath, objectHash string) error {
 
 	return nil
 }
+
+func ListBranches() error {
+	refsDir := filepath.Join(".hit", "refs", "heads")
+
+	if _, err := os.Stat(refsDir); os.IsNotExist(err) {
+		fmt.Println("No branches found")
+		return nil
+	}
+
+	entries, err := os.ReadDir(refsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read branches directory: %v", err)
+	}
+
+	if len(entries) == 0 {
+		fmt.Println("No branches found")
+		return nil
+	}
+
+	currentBranch, err := utils.GetBranch()
+	if err != nil {
+		currentBranch = ""
+	}
+
+	fmt.Println("Branches:")
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			branchName := entry.Name()
+			if branchName == currentBranch {
+				fmt.Printf("  * %s\n", branchName)
+			} else {
+				fmt.Printf("    %s\n", branchName)
+			}
+		}
+	}
+
+	return nil
+}
+
+func DeleteBranch(branch string, force bool) error {
+	branchPath := filepath.Join(".hit", "refs", "heads", branch)
+	if _, err := os.Stat(branchPath); os.IsNotExist(err) {
+		return fmt.Errorf("branch '%s' does not exist", branch)
+	}
+
+	currentBranch, err := utils.GetBranch()
+	if err != nil {
+		return fmt.Errorf("failed to get current branch: %v", err)
+	}
+
+	if branch == currentBranch {
+		return fmt.Errorf("cannot delete current branch '%s'. Switch to another branch first", branch)
+	}
+
+	if !force {
+		hasUnmergedChanges, err := hasUnmergedChanges(branch)
+		if err != nil {
+			return fmt.Errorf("failed to check for unmerged changes: %v", err)
+		}
+
+		if hasUnmergedChanges {
+			return fmt.Errorf("branch '%s' has unmerged changes. Use -D to force delete", branch)
+		}
+	}
+
+	err = os.Remove(branchPath)
+	if err != nil {
+		return fmt.Errorf("failed to delete branch '%s': %v", branch, err)
+	}
+
+	logPath := filepath.Join(".hit", "logs", "refs", "heads", branch)
+	if _, err := os.Stat(logPath); err == nil {
+		os.Remove(logPath)
+	}
+
+	fmt.Printf("Deleted branch '%s'\n", branch)
+	return nil
+}
+
+func hasUnmergedChanges(branch string) (bool, error) {
+	branchCommit, err := utils.GetCurrentCommit(branch)
+	if err != nil {
+		return false, err
+	}
+
+	currentBranch, err := utils.GetBranch()
+	if err != nil {
+		return false, err
+	}
+
+	currentCommit, err := utils.GetCurrentCommit(currentBranch)
+	if err != nil {
+		return false, err
+	}
+
+	return branchCommit != currentCommit, nil
+}
