@@ -8,11 +8,13 @@ import { BranchSelector } from './BranchSelector'
 interface RepositoryHeaderProps {
   repo: Repo
   onBranchSelect: (branch: Branch) => void
+  activeBranch: string | null
 }
 
 export function RepositoryHeader({
   repo,
   onBranchSelect,
+  activeBranch,
 }: RepositoryHeaderProps) {
   return (
     <div className="bg-card border-border flex items-center justify-between border-b px-6 py-4">
@@ -42,7 +44,11 @@ export function RepositoryHeader({
           <p className="text-muted-foreground text-sm">{repo.description}</p>
         )}
       </div>
-      <BranchSelector repoName={repo.name} onBranchSelect={onBranchSelect} />
+      <BranchSelector
+        repoName={repo.name}
+        activeBranch={activeBranch}
+        onBranchSelect={onBranchSelect}
+      />
     </div>
   )
 }

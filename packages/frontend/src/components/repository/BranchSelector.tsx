@@ -9,11 +9,13 @@ import { Branch } from '@/types/repo'
 
 interface BranchSelectorProps {
   repoName: string
+  activeBranch: string | null
   onBranchSelect?: (branch: Branch) => void
 }
 
 export function BranchSelector({
   repoName,
+  activeBranch,
   onBranchSelect,
 }: BranchSelectorProps) {
   const {
@@ -36,12 +38,14 @@ export function BranchSelector({
   }, [repoName, fetchBranches])
 
   useEffect(() => {
-    const defaultBranch = getDefaultBranch()
+    const defaultBranch = activeBranch
+      ? branches.find((branch) => branch.name === activeBranch)
+      : getDefaultBranch()
     if (defaultBranch) {
       setSelectedBranch(defaultBranch)
       setActiveBranch(defaultBranch)
     }
-  }, [branches, getDefaultBranch, setActiveBranch])
+  }, [branches, getDefaultBranch, setActiveBranch, activeBranch])
 
   const handleBranchSelect = (branch: Branch) => {
     setSelectedBranch(branch)

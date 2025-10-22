@@ -108,8 +108,12 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
         className="mb-4"
       />
 
-      <RepositoryHeader repo={activeRepo} onBranchSelect={handleBranchSelect} />
-      <RepositoryTabs repoName={repoName} userName={userName} />
+      <RepositoryHeader
+        repo={activeRepo}
+        activeBranch={branchName}
+        onBranchSelect={handleBranchSelect}
+      />
+      {/* <RepositoryTabs repoName={repoName} userName={userName} /> */}
 
       {!isBranchesLoading && branches.length === 0 ? (
         <Card className="border-border bg-card rounded-none">
