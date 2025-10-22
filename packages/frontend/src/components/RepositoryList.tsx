@@ -172,7 +172,7 @@ export function RepositoryList() {
         </div>
       ) : (
         <>
-          <div>
+          <div className="space-y-2">
             {repos.map((repo) => (
               <RepositoryCard key={repo._id} repo={repo} />
             ))}

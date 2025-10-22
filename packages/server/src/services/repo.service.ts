@@ -2,10 +2,12 @@ import { db } from '../db/mongo/init'
 import { IRepo } from '../db/mongo/models/Repo.schema'
 import HashService from './hash.service'
 import RemoteService from './remote.service'
-import ZlibService from './zlib.service'
 
 class RepoService {
-  static async getRepoDetails(remote: string): Promise<{
+  static async getRepoDetails(
+    remote: string,
+    branchName?: string,
+  ): Promise<{
     repo: Partial<IRepo>
     branches: string[]
     files: {
@@ -16,7 +18,6 @@ class RepoService {
   }> {
     const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
 
-    // Use aggregation pipeline for better performance
     const repoData = await db?.RepoModel.aggregate([
       {
         $lookup: {
@@ -80,8 +81,26 @@ class RepoService {
       type: 'file' | 'directory'
       lastModified: string
     }[] = []
-    if (defaultBranchCommit && defaultBranchCommit.hash) {
-      files = await HashService.getRootFiles(defaultBranchCommit.hash)
+    if (branchName) {
+      const branch = repoData[0].branches.find(
+        (branch: any) => branch.name === branchName,
+      )
+      if (!branch) {
+        throw new Error(`Branch '${branchName}' not found`)
+      }
+
+      const latestCommit = await db?.CommitModel.findById(
+        branch.headCommit,
+      ).lean()
+      if (!latestCommit) {
+        throw new Error(`Commit '${branch.headCommit}' not found`)
+      }
+
+      files = await HashService.getRootFiles(latestCommit.hash)
+    } else {
+      if (defaultBranchCommit && defaultBranchCommit.hash) {
+        files = await HashService.getRootFiles(defaultBranchCommit.hash)
+      }
     }
 
     return {

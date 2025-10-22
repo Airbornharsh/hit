@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { GitBranch, Copy, Check } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 interface RepositoryPageProps {
   params: Promise<{
@@ -21,6 +22,8 @@ interface RepositoryPageProps {
 
 export default function RepositoryPage({ params }: RepositoryPageProps) {
   const { userName, repoName } = use(params)
+  const searchParams = useSearchParams()
+  const branchName = searchParams.get('branchName')
   const { user } = useAuthStore()
   const {
     activeRepo,
@@ -34,24 +37,34 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const callOnce = useRef(false)
-
+  const router = useRouter()
   console.log(selectedBranch)
 
   useEffect(() => {
     setMetadata({
       username: userName,
       repoName: repoName,
-      branchName: null,
+      branchName: branchName,
       commitHash: null,
     })
     if (userName && repoName && !callOnce.current) {
       callOnce.current = true
       fetchRepo()
     }
-  }, [userName, repoName, fetchRepo, setMetadata])
+  }, [userName, repoName, fetchRepo, setMetadata, branchName])
 
   const handleBranchSelect = (branch: Branch) => {
+    setMetadata({
+      username: userName,
+      repoName: repoName,
+      branchName: branch.name,
+      commitHash: null,
+    })
+    fetchRepo()
     setSelectedBranch(branch)
+    const currentQueryParams = new URLSearchParams(window.location.search)
+    currentQueryParams.set('branchName', branch.name)
+    router.push(`/${userName}/${repoName}?${currentQueryParams.toString()}`)
   }
 
   const copyToClipboard = async (command: string) => {

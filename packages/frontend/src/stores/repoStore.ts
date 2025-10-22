@@ -239,13 +239,16 @@ export const useRepoStore = create<RepoState>()(
       },
 
       fetchRepo: async () => {
-        const { username, repoName } = get().metadata
+        const { reset } = get()
+        reset()
+
+        const { username, repoName, branchName } = get().metadata
         if (!username || !repoName) return
         set({ isReposLoading: true, reposError: null })
         try {
           const remote = `hit@hithub.com:${username}/${repoName}.hit`
           const response = await AxiosClient.get(
-            `/api/v1/repo/individual?remote=${remote}`,
+            `/api/v1/repo/individual?remote=${remote}${branchName ? `&branchName=${branchName}` : ''}`,
           )
           const repo = response.data.data.repo
           const branches = response.data.data.branches

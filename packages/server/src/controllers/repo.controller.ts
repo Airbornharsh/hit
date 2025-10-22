@@ -137,9 +137,12 @@ class RepoController {
 
   static async getRepo(req: Request, res: Response) {
     try {
-      const { remote } = req.query
+      const { remote, branchName } = req.query
 
-      const repoDetails = await RepoService.getRepoDetails(remote as string)
+      const repoDetails = await RepoService.getRepoDetails(
+        remote as string,
+        branchName as string,
+      )
 
       res.json({
         success: true,
