@@ -63,6 +63,14 @@ func AddFile(filePath string) (string, error) {
 		return "", err
 	}
 
+	ignoreMatcher, err := GetIgnoreMatcher()
+	if err == nil {
+		relPathSlash := filepath.ToSlash(relPath)
+		if ignoreMatcher.ShouldIgnore(relPathSlash, false) {
+			return "", fmt.Errorf("file is ignored by .hitignore: %s", filePath)
+		}
+	}
+
 	content, err := os.ReadFile(absPath)
 	if err != nil {
 		return "", err
@@ -140,6 +148,11 @@ func AddAllFile(currentDir string) {
 func collectExistingFiles(rootDir string) map[string]bool {
 	existingFiles := make(map[string]bool)
 
+	ignoreMatcher, err := NewIgnoreMatcher(rootDir)
+	if err != nil {
+		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+	}
+
 	var collectFiles func(dir string)
 	collectFiles = func(dir string) {
 		entries, err := os.ReadDir(dir)
@@ -149,14 +162,25 @@ func collectExistingFiles(rootDir string) map[string]bool {
 
 		for _, entry := range entries {
 			absPath := filepath.Join(dir, entry.Name())
+
+			if strings.HasSuffix(absPath, ".hit") {
+				continue
+			}
+
+			relPath, err := getRelativePath(absPath)
+			if err != nil {
+				continue
+			}
+			relPath = filepath.ToSlash(relPath)
+
+			if ignoreMatcher.ShouldIgnore(relPath, entry.IsDir()) {
+				continue
+			}
+
 			if entry.IsDir() {
-				if !strings.HasSuffix(absPath, ".hit") {
-					collectFiles(absPath)
-				}
+				collectFiles(absPath)
 			} else {
-				if relPath, err := getRelativePath(absPath); err == nil {
-					existingFiles[relPath] = true
-				}
+				existingFiles[relPath] = true
 			}
 		}
 	}

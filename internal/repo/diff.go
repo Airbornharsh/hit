@@ -25,6 +25,11 @@ func DiffWorkingVsIndex() {
 		_ = json.Unmarshal(data, index)
 	}
 
+	ignoreMatcher, err := NewIgnoreMatcher(repoRoot)
+	if err != nil {
+		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+	}
+
 	working := make(map[string]string)
 
 	var walk func(dir string)
@@ -46,12 +51,18 @@ func DiffWorkingVsIndex() {
 			if err != nil {
 				continue
 			}
+			relSlash := filepath.ToSlash(rel)
+
+			if ignoreMatcher.ShouldIgnore(relSlash, false) {
+				continue
+			}
+
 			// hash file content
 			content, err := os.ReadFile(p)
 			if err != nil {
 				continue
 			}
-			working[filepath.ToSlash(rel)] = storage.Hash(content)
+			working[relSlash] = storage.Hash(content)
 		}
 	}
 	walk(repoRoot)

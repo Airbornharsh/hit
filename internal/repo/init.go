@@ -124,9 +124,13 @@ func InitializeIndex() {
 	fmt.Printf("Initialized index with %d files\n", len(index.Entries))
 }
 
-// collectAllFiles recursively collects all files in the given directory, excluding .hit
 func collectAllFiles(rootDir string) map[string]bool {
 	existingFiles := make(map[string]bool)
+
+	ignoreMatcher, err := NewIgnoreMatcher(rootDir)
+	if err != nil {
+		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+	}
 
 	var collectFiles func(dir string)
 	collectFiles = func(dir string) {
@@ -137,11 +141,23 @@ func collectAllFiles(rootDir string) map[string]bool {
 
 		for _, entry := range entries {
 			path := filepath.Join(dir, entry.Name())
+
+			if strings.HasSuffix(path, ".hit") {
+				continue
+			}
+
+			relPath, err := filepath.Rel(rootDir, path)
+			if err != nil {
+				continue
+			}
+			relPath = filepath.ToSlash(relPath)
+
+			if ignoreMatcher.ShouldIgnore(relPath, entry.IsDir()) {
+				continue
+			}
+
 			if entry.IsDir() {
-				// Skip .hit directory
-				if !strings.HasSuffix(path, ".hit") {
-					collectFiles(path)
-				}
+				collectFiles(path)
 			} else {
 				existingFiles[path] = true
 			}

@@ -132,12 +132,14 @@ func hasUncommittedChanges() (bool, error) {
 
 	for filePath := range workingFiles {
 		if _, exists := index.Entries[filePath]; !exists {
+			fmt.Printf("File is not in index: %s\n", filePath)
 			return true, nil
 		}
 	}
 
 	for filePath := range index.Entries {
 		if _, exists := workingFiles[filePath]; !exists {
+			fmt.Printf("File is not in working directory: %s\n", filePath)
 			return true, nil
 		}
 	}
@@ -145,6 +147,7 @@ func hasUncommittedChanges() (bool, error) {
 	for filePath, expectedHash := range index.Entries {
 		if actualHash, exists := workingFiles[filePath]; exists {
 			if actualHash != expectedHash {
+				fmt.Printf("File is not in working directory: %s\n", filePath)
 				return true, nil
 			}
 		}
@@ -156,12 +159,28 @@ func hasUncommittedChanges() (bool, error) {
 func getAllWorkingFiles() (map[string]string, error) {
 	workingFiles := make(map[string]string)
 
-	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+	ignoreMatcher, err := GetIgnoreMatcher()
+	if err != nil {
+		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+	}
+
+	err = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if strings.HasPrefix(path, ".hit") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+		}
+
+		relPath, err := filepath.Rel(".", path)
+		if err != nil {
+			return nil
+		}
+		relPath = filepath.ToSlash(relPath)
+		if ignoreMatcher.ShouldIgnore(relPath, d.IsDir()) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -178,7 +197,7 @@ func getAllWorkingFiles() (map[string]string, error) {
 		}
 
 		hash := storage.Hash(content)
-		workingFiles[path] = hash
+		workingFiles[relPath] = hash
 
 		return nil
 	})
@@ -198,18 +217,27 @@ func updateWorkingDirectory(tree go_types.Tree) error {
 		json.Unmarshal(data, index)
 	}
 
+	ignoreMatcher, err := GetIgnoreMatcher()
+	if err != nil {
+		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+	}
+
 	for filePath := range index.Entries {
 		if _, exists := tree.Entries[filePath]; !exists {
-			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("failed to remove file %s: %v", filePath, err)
+			if !ignoreMatcher.ShouldIgnore(filePath, false) {
+				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("failed to remove file %s: %v", filePath, err)
+				}
 			}
 		}
 	}
 
 	for filePath, objectHash := range tree.Entries {
-		err := restoreFileFromObject(filePath, objectHash)
-		if err != nil {
-			return fmt.Errorf("failed to restore file %s: %v", filePath, err)
+		if !ignoreMatcher.ShouldIgnore(filePath, false) {
+			err := restoreFileFromObject(filePath, objectHash)
+			if err != nil {
+				return fmt.Errorf("failed to restore file %s: %v", filePath, err)
+			}
 		}
 	}
 
@@ -219,13 +247,20 @@ func updateWorkingDirectory(tree go_types.Tree) error {
 func updateIndex(tree go_types.Tree) error {
 	indexPath := filepath.Join(".hit", "index.json")
 
+	ignoreMatcher, err := GetIgnoreMatcher()
+	if err != nil {
+		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+	}
+
 	index := &go_types.Index{
 		Entries: make(map[string]string),
 		Changed: false,
 	}
 
 	for filePath, objectHash := range tree.Entries {
-		index.Entries[filePath] = objectHash
+		if !ignoreMatcher.ShouldIgnore(filePath, false) {
+			index.Entries[filePath] = objectHash
+		}
 	}
 
 	indexData, err := json.MarshalIndent(index, "", "  ")
