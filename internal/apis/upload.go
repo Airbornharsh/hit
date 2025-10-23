@@ -15,7 +15,7 @@ import (
 	"github.com/airbornharsh/hit/utils"
 )
 
-func UploadFile(hash string) (string, error) {
+func UploadFile(remote string, hash string) (string, error) {
 	filePath := filepath.Join(".hit", "objects", hash[:2], hash[2:])
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -24,7 +24,7 @@ func UploadFile(hash string) (string, error) {
 
 	token := utils.GetSession().Token
 
-	url := fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s", hash)
+	url := fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s?remote=%s", hash, remote)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", err
@@ -74,10 +74,22 @@ func UploadFile(hash string) (string, error) {
 		return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)
 	}
 
+	url = fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s/confirm?remote=%s", hash, remote)
+	req, err = http.NewRequest("POST", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Terminal %s", token))
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
 	return signedUploadUrlApiBody.Data.PublicUrl, nil
 }
 
-func UploadAllFiles() error {
+func UploadAllFiles(remote string) error {
 	filePath := filepath.Join(".hit", "objects")
 	hashRootEntries, err := os.ReadDir(filePath)
 	if err != nil {
@@ -99,7 +111,7 @@ func UploadAllFiles() error {
 		go func(id int) {
 			defer wg.Done()
 			for hash := range fileChan {
-				_, err := UploadFile(hash)
+				_, err := UploadFile(remote, hash)
 				if err != nil {
 					os.Exit(1)
 				}

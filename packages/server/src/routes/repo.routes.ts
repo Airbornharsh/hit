@@ -7,6 +7,7 @@ const router: Router = express.Router()
 router.use(Middleware.authMiddleware)
 
 router.get('/signed-url/:hash', RepoController.getSignedUploadUrl)
+router.post('/signed-url/:hash/confirm', RepoController.confirmSignedUploadUrl)
 
 router.post('/', RepoController.createRepo)
 router.get('/', RepoController.getRepos)

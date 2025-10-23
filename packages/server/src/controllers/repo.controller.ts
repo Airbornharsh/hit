@@ -57,6 +57,54 @@ class RepoController {
     }
   }
 
+  static async confirmSignedUploadUrl(req: Request, res: Response) {
+    try {
+      const { hash } = req.params
+      const { remote } = req.query
+
+      const { userName, repoName } = await RemoteService.remoteBreakdown(
+        remote as string,
+      )
+      const userId = await db?.UserModel.findOne({ username: userName }).lean()
+      if (!userId || !userId?._id) {
+        res.status(400).json({
+          success: false,
+          message: 'User not found',
+        })
+        return
+      }
+
+      const repo = await db?.RepoModel.findOne({
+        userId: userId._id,
+        name: repoName,
+      }).lean()
+      if (!repo || !repo?._id) {
+        res.status(400).json({
+          success: false,
+          message: 'Repo not found',
+        })
+        return
+      }
+
+      try {
+        await db?.HashModel.create({ hash, repoId: repo._id })
+      } catch (error) {}
+
+      res.json({
+        success: true,
+        message: 'Signed upload URL confirmed successfully',
+      })
+      return
+    } catch (error) {
+      console.error('Confirm signed upload URL error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to confirm signed upload URL',
+      })
+      return
+    }
+  }
+
   static async createRepo(req: Request, res: Response) {
     try {
       const { userId } = (req as any).user

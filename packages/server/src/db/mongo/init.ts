@@ -9,6 +9,7 @@ import TerminalSessionSchema, {
 import RepoSchema, { IRepo } from './models/Repo.schema'
 import BranchSchema, { IBranch } from './models/Branch.schema'
 import CommitSchema, { ICommit } from './models/Commit.schema'
+import HashSchema, { IHash } from './models/Hash.schema'
 
 mongoose.set('strictQuery', false)
 
@@ -21,6 +22,7 @@ interface Db {
   RepoModel: Model<IRepo>
   BranchModel: Model<IBranch>
   CommitModel: Model<ICommit>
+  HashModel: Model<IHash>
 }
 
 const connectDB = async () => {
@@ -39,13 +41,14 @@ const connectDB = async () => {
     const RepoModel = dbConnection.model<IRepo>('Repo', RepoSchema)
     const BranchModel = dbConnection.model<IBranch>('Branch', BranchSchema)
     const CommitModel = dbConnection.model<ICommit>('Commit', CommitSchema)
-
+    const HashModel = dbConnection.model<IHash>('Hash', HashSchema)
     db = {
       UserModel,
       TerminalSessionModel,
       RepoModel,
       BranchModel,
       CommitModel,
+      HashModel,
     }
   } catch (error: any) {
     console.log(error)

@@ -12,11 +12,6 @@ import (
 )
 
 func Push(remoteName, branchName string) error {
-	err := apis.UploadAllFiles()
-	if err != nil {
-		return err
-	}
-
 	config, err := utils.GetConfig()
 	if err != nil {
 		return err
@@ -28,6 +23,11 @@ func Push(remoteName, branchName string) error {
 	}
 
 	remote := config.Remotes[remoteName].URL
+
+	err = apis.UploadAllFiles(remote)
+	if err != nil {
+		return err
+	}
 
 	headExists, currentCommit, err := apis.GetHeadCommitHash(remote, branchName)
 	if err != nil {
