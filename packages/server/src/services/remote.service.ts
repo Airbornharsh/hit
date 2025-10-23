@@ -269,17 +269,25 @@ class RemoteService {
   static async getHeadCommit(
     remote: string,
     branchName: string,
-  ): Promise<{ commit: ICommit | null; branch: IBranch; repo: IRepo }> {
-    const { branch, repo } = await this.getBranch(remote, branchName)
+  ): Promise<{
+    commit: ICommit | null
+    branch: IBranch | null
+    repo: IRepo | null
+  }> {
+    try {
+      const { branch, repo } = await this.getBranch(remote, branchName)
 
-    if (!branch.headCommit) {
-      return { commit: null, branch, repo }
+      if (!branch.headCommit) {
+        return { commit: null, branch, repo }
+      }
+
+      const commit = (await db?.CommitModel.findById(
+        branch.headCommit,
+      ).lean()) as ICommit | null
+      return { commit: commit || null, branch, repo }
+    } catch (error) {
+      return { commit: null, branch: null, repo: null }
     }
-
-    const commit = (await db?.CommitModel.findById(
-      branch.headCommit,
-    ).lean()) as ICommit | null
-    return { commit: commit || null, branch, repo }
   }
 
   static async getUserByUsername(username: string): Promise<{ user: IUser }> {
@@ -357,12 +365,15 @@ class RemoteService {
   }
 
   static async branchExists(
-    remote: string,
+    repoId: string,
     branchName: string,
   ): Promise<boolean> {
     try {
-      await this.getBranch(remote, branchName)
-      return true
+      const exists = await db?.BranchModel.exists({
+        repoId: repoId,
+        name: branchName,
+      })
+      return exists ? true : false
     } catch {
       return false
     }

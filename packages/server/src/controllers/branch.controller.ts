@@ -74,7 +74,7 @@ class BranchController {
       const { branchName } = req.params
       const { remote } = req.query
 
-      const { commit, branch, repo } = await RemoteService.getHeadCommit(
+      const { commit } = await RemoteService.getHeadCommit(
         remote as string,
         branchName,
       )
@@ -134,7 +134,7 @@ class BranchController {
       const { repo } = await RemoteService.getRepo(remote as string)
 
       const branchExists = await RemoteService.branchExists(
-        remote as string,
+        repo._id as string,
         branchName,
       )
       let branchId: string

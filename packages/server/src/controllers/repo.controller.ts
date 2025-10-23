@@ -246,13 +246,17 @@ class RepoController {
               name: branch.name,
               headCommit: headCommit?.hash || '',
               commits:
-                commits?.map((commit) => ({
-                  hash: commit.hash,
-                  parent: commit.parent,
-                  message: commit.message,
-                  author: commit.author,
-                  timestamp: commit.timestamp.toISOString(),
-                })) || [],
+                commits
+                  ?.sort(
+                    (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+                  )
+                  .map((commit) => ({
+                    hash: commit.hash,
+                    parent: commit.parent,
+                    message: commit.message,
+                    author: commit.author,
+                    timestamp: commit.timestamp.toISOString(),
+                  })) || [],
             }
           }),
         ),

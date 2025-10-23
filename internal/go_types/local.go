@@ -28,3 +28,7 @@ type Commit struct {
 	Author    string    `json:"author"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+func TimeNow() time.Time {
+	return time.Now()
+}

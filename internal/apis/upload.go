@@ -29,12 +29,58 @@ func UploadFile(remote string, hash string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if exists {
-		return hashUrl, nil
+	if !exists {
+		url := fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s?remote=%s", hash, remote)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Terminal %s", token))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", err
+		}
+
+		var signedUploadUrlApiBody go_types.SignedUploadUrlApiBody
+		err = json.Unmarshal(body, &signedUploadUrlApiBody)
+		if err != nil {
+			return "", err
+		}
+
+		if !signedUploadUrlApiBody.Success {
+			return "", fmt.Errorf("API request failed: %s", signedUploadUrlApiBody.Message)
+		}
+
+		req, err = http.NewRequest("PUT", signedUploadUrlApiBody.Data.SignedUrl, bytes.NewReader(file))
+		if err != nil {
+			return "", err
+		}
+
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)
+		}
+
+		hashUrl = signedUploadUrlApiBody.Data.PublicUrl
 	}
 
-	url := fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s?remote=%s", hash, remote)
-	req, err := http.NewRequest("GET", url, nil)
+	url := fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s/confirm?remote=%s", hash, remote)
+	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -45,53 +91,7 @@ func UploadFile(remote string, hash string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var signedUploadUrlApiBody go_types.SignedUploadUrlApiBody
-	err = json.Unmarshal(body, &signedUploadUrlApiBody)
-	if err != nil {
-		return "", err
-	}
-
-	if !signedUploadUrlApiBody.Success {
-		return "", fmt.Errorf("API request failed: %s", signedUploadUrlApiBody.Message)
-	}
-
-	req, err = http.NewRequest("PUT", signedUploadUrlApiBody.Data.SignedUrl, bytes.NewReader(file))
-	if err != nil {
-		return "", err
-	}
-
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)
-	}
-
-	url = fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s/confirm?remote=%s", hash, remote)
-	req, err = http.NewRequest("POST", url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("Terminal %s", token))
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	return signedUploadUrlApiBody.Data.PublicUrl, nil
+	return hashUrl, nil
 }
 
 func UploadAllFiles(remote string) error {
