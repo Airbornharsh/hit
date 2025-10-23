@@ -31,7 +31,7 @@ func CreateCommit(message string) (string, error) {
 	parentLogFile, _ := os.ReadFile(parentLogFilePath)
 
 	commit := go_types.Commit{
-		Tree:      stagedTreeHash,
+		Hash:      stagedTreeHash,
 		Parent:    string(parentFile),
 		Message:   message,
 		Author:    os.Getenv("USER"),
@@ -91,7 +91,7 @@ func LogCommits() {
 	for i := 0; i < len(commits); i++ {
 		commit := commits[i]
 
-		fmt.Printf("commit %s\n", commit.Tree)
+		fmt.Printf("commit %s\n", commit.Hash)
 		fmt.Printf("Author: %s\n", commit.Author)
 		fmt.Printf("Date:   %s\n", commit.Timestamp.Format("Mon Jan 2 15:04:05 2006 -0700"))
 		fmt.Printf("\n    %s\n\n", commit.Message)

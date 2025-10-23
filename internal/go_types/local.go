@@ -22,7 +22,7 @@ type Tree struct {
 }
 
 type Commit struct {
-	Tree      string    `json:"tree"`
+	Hash      string    `json:"hash"`
 	Parent    string    `json:"parent"`
 	Message   string    `json:"message"`
 	Author    string    `json:"author"`

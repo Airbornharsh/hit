@@ -46,7 +46,7 @@ func Push(remoteName, branchName string) error {
 
 	if headExists {
 		for i, commit := range commits {
-			if commit.Tree == currentCommit {
+			if commit.Hash == currentCommit {
 				apiCommits = commits[i+1:]
 				break
 			}

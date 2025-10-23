@@ -9,14 +9,6 @@ interface RemoteBreakdown {
   repoName: string
 }
 
-interface RepoWithUser extends IRepo {
-  user?: IUser
-}
-
-interface BranchWithRepo extends IBranch {
-  repo?: IRepo
-}
-
 interface CommitWithRepo extends ICommit {
   repo?: IRepo
   branch?: IBranch
@@ -36,7 +28,7 @@ class RemoteService {
       }
 
       const userName = pathParts[0]
-      const repoName = pathParts[1].split('.')[0]
+      const repoName = pathParts[1].split('.hit')[0]
 
       if (!userName || !repoName) {
         throw new Error('Username and repository name are required')
@@ -50,7 +42,9 @@ class RemoteService {
     }
   }
 
-  static async getRepo(remote: string): Promise<{ repo: IRepo }> {
+  static async getRepo(
+    remote: string,
+  ): Promise<{ repo: IRepo; username: string; repoName: string }> {
     const { userName, repoName } = await this.remoteBreakdown(remote)
     const repo = (await db?.RepoModel.findOne({
       username: userName,
@@ -61,33 +55,31 @@ class RemoteService {
       throw new Error(`Repository '${userName}/${repoName}' not found`)
     }
 
-    return { repo }
+    return { repo, username: userName, repoName: repoName }
   }
 
   static async getRepoWithUser(
     remote: string,
-  ): Promise<{ repo: RepoWithUser }> {
+  ): Promise<{ repo: IRepo; user: IUser; username: string; repoName: string }> {
     const { userName, repoName } = await this.remoteBreakdown(remote)
+    const { user } = await this.getUserByUsername(userName)
 
-    const repoData = await db?.RepoModel.aggregate([
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $match: { 'user.username': userName, name: repoName } },
-      { $limit: 1 },
-    ])
-
-    if (!repoData || repoData.length === 0) {
+    if (!user || !user?._id) {
       throw new Error(`Repository '${userName}/${repoName}' not found`)
     }
 
-    const repo = repoData[0]
-    return { repo }
+    const repo = (await db?.RepoModel.findOne({
+      userId: user._id,
+      name: repoName,
+    })
+      .populate('defaultBranch')
+      .lean()) as IRepo | null
+
+    if (!repo || !repo?._id) {
+      throw new Error(`Repository '${userName}/${repoName}' not found`)
+    }
+
+    return { repo, user, username: userName, repoName: repoName }
   }
 
   static async getDefaultBranch(

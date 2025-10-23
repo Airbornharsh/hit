@@ -44,3 +44,27 @@ type CheckSessionApiBody struct {
 		Email string `json:"email"`
 	} `json:"data"`
 }
+
+type CloneRepositoryApiBody struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		Username   string   `json:"username"`
+		RepoName   string   `json:"repoName"`
+		Repository string   `json:"repository"`
+		Hashes     []string `json:"hashes"`
+		Branches   []struct {
+			Name       string `json:"name"`
+			HeadCommit string `json:"headCommit"`
+			Commits    []struct {
+				Hash      string `json:"hash"`
+				Parent    string `json:"parent"`
+				Message   string `json:"message"`
+				Author    string `json:"author"`
+				Timestamp string `json:"timestamp"`
+			} `json:"commits"`
+		} `json:"branches"`
+		Config     map[string]any `json:"config"`
+		HeadBranch string         `json:"headBranch"`
+	} `json:"data"`
+}

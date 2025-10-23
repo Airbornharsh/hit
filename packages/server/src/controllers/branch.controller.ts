@@ -111,7 +111,7 @@ class BranchController {
       const { branchName } = req.params
       const { remote } = req.query
       const commits = (req.body.commits || []) as {
-        tree: string
+        hash: string
         parent: string
         author: string
         timestamp: string
@@ -120,7 +120,7 @@ class BranchController {
 
       for (const commit of commits) {
         if (
-          !commit.tree ||
+          !commit.hash ||
           !commit.parent ||
           !commit.author ||
           !commit.timestamp ||

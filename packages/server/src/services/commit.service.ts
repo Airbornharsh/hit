@@ -10,7 +10,7 @@ class CommitService {
     repoId: string,
     branchId: string,
     commits: {
-      tree: string
+      hash: string
       parent: string
       author: string
       timestamp: string
@@ -23,7 +23,7 @@ class CommitService {
         const newCommit = await db?.CommitModel.create({
           repoId,
           branchId,
-          hash: commit.tree,
+          hash: commit.hash,
           parent: commit.parent,
           author: commit.author,
           timestamp: commit.timestamp,

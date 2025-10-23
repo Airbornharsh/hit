@@ -12,5 +12,6 @@ router.post('/signed-url/:hash/confirm', RepoController.confirmSignedUploadUrl)
 router.post('/', RepoController.createRepo)
 router.get('/', RepoController.getRepos)
 router.get('/individual', RepoController.getRepo)
+router.post('/clone', RepoController.cloneRepository)
 
 export default router

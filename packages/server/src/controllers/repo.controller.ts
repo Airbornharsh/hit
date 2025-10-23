@@ -4,6 +4,7 @@ import R2CloudflareService from '../services/r2cloudflare.service'
 import axios from 'axios'
 import RemoteService from '../services/remote.service'
 import RepoService from '../services/repo.service'
+import { IBranch } from '../db/mongo/models/Branch.schema'
 
 class RepoController {
   static async getSignedUploadUrl(req: Request, res: Response) {
@@ -202,6 +203,118 @@ class RepoController {
           message: 'Failed to fetch repo',
         })
       }
+      return
+    }
+  }
+
+  static async cloneRepository(req: Request, res: Response) {
+    try {
+      const { remote } = req.body
+
+      const { repo, username, repoName } = await RemoteService.getRepo(
+        remote as string,
+      )
+
+      const branch = await db?.BranchModel.findOne({
+        repoId: repo._id,
+        _id: repo.defaultBranch,
+      }).lean()
+      const defaultBranch = branch?.name
+
+      const branches =
+        (await db?.BranchModel.find({ repoId: repo._id }).lean()) || []
+
+      if (!defaultBranch || !branches[0]) {
+        res.status(400).json({
+          success: false,
+          message: 'Failed to clone repository',
+        })
+        return
+      }
+
+      const [branchesData, hashes] = await Promise.all([
+        Promise.all(
+          branches.map(async (branch) => {
+            const [commits, headCommit] = await Promise.all([
+              db?.CommitModel.find({
+                repoId: repo._id,
+                branchId: branch._id,
+              }).lean(),
+              db?.CommitModel.findById(branch.headCommit).lean(),
+            ])
+            return {
+              name: branch.name,
+              headCommit: headCommit?.hash || '',
+              commits:
+                commits?.map((commit) => ({
+                  hash: commit.hash,
+                  parent: commit.parent,
+                  message: commit.message,
+                  author: commit.author,
+                  timestamp: commit.timestamp.toISOString(),
+                })) || [],
+            }
+          }),
+        ),
+        (await db?.HashModel.find({ repoId: repo._id }).distinct('hash')) || [],
+      ])
+
+      const config = {
+        remotes: {
+          origin: {
+            name: 'origin',
+            url: remote,
+          },
+        },
+      }
+
+      const data: {
+        username: string
+        repoName: string
+        repository: string
+        hashes: string[]
+        branches: {
+          name: string
+          headCommit: string
+          commits: {
+            hash: string
+            parent: string
+            message: string
+            author: string
+            timestamp: string
+          }[]
+        }[]
+        config: {
+          remotes: {
+            [key: string]: {
+              name: string
+              url: string
+            }
+          }
+        }
+        headBranch: string
+      } = {
+        username: username,
+        repoName: repoName,
+        repository: remote,
+        hashes: hashes,
+        branches: branchesData,
+        config: config,
+        headBranch: defaultBranch || branches[0].name,
+      }
+
+      res.json({
+        success: true,
+        message: 'Repository cloned successfully',
+        data: data,
+      })
+      return
+    } catch (error) {
+      console.error('Clone repository error:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to clone repository',
+      })
       return
     }
   }

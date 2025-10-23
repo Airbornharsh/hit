@@ -1,8 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"compress/zlib"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -61,4 +64,49 @@ func LoadObject(hash string) (string, error) {
 	}
 
 	return string(decompressed), nil
+}
+
+func LoadObjectUrl(hash string) (string, error) {
+	url := fmt.Sprintf("https://media.harshkeshri.com/hit/%s/%s", hash[:2], hash[2:])
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	reader, err := zlib.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decompressed), nil
+}
+
+func LoadObjectUrlCompressed(hash string) (string, error) {
+	url := fmt.Sprintf("https://media.harshkeshri.com/hit/%s/%s", hash[:2], hash[2:])
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
 }

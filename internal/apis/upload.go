@@ -125,7 +125,6 @@ func UploadAllFiles(remote string) error {
 			path := filepath.Join(filePath, entry.Name())
 			hashEntries, err := os.ReadDir(path)
 			if err != nil {
-				fmt.Println("Error reading subdir:", path, err)
 				continue
 			}
 			for _, hashEntry := range hashEntries {
