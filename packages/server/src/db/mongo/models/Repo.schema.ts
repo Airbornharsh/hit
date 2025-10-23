@@ -4,6 +4,7 @@ import { IBranch } from './Branch.schema'
 
 export interface IRepo extends mongoose.Document {
   userId: mongoose.Schema.Types.ObjectId | IUser
+  username: string
   name: string
   description: string
   isPublic: boolean
@@ -19,6 +20,7 @@ const RepoSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    username: { type: String, required: true },
     name: { type: String, required: true },
     description: { type: String, default: '' },
     isPublic: { type: Boolean, default: false },

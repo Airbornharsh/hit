@@ -107,11 +107,12 @@ class RepoController {
 
   static async createRepo(req: Request, res: Response) {
     try {
-      const { userId } = (req as any).user
+      const { userId, username } = (req as any).user
       const { name, description, isPublic } = req.body
 
       const repo = await db?.RepoModel.create({
         userId,
+        username,
         name,
         description,
         isPublic,

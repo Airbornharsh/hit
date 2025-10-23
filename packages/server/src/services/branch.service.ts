@@ -27,16 +27,8 @@ class BranchService {
   }> {
     const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
 
-    const user = await db?.UserModel.findOne({
-      username: userName,
-    }).lean()
-
-    if (!user || !user?._id) {
-      throw new Error('Failed to fetch user')
-    }
-
     const repo = await db?.RepoModel.findOne({
-      userId: user._id,
+      username: userName,
       name: repoName,
     }).lean()
 
@@ -88,16 +80,8 @@ class BranchService {
   ): Promise<FileContent> {
     const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
 
-    const user = await db?.UserModel.findOne({
-      username: userName,
-    }).lean()
-
-    if (!user || !user?._id) {
-      throw new Error('Failed to fetch user')
-    }
-
     const repo = await db?.RepoModel.findOne({
-      userId: user._id,
+      username: userName,
       name: repoName,
     }).lean()
 
@@ -150,16 +134,8 @@ class BranchService {
   }> {
     const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
 
-    const user = await db?.UserModel.findOne({
-      username: userName,
-    }).lean()
-
-    if (!user || !user?._id) {
-      throw new Error('Failed to fetch user')
-    }
-
     const repo = await db?.RepoModel.findOne({
-      userId: user._id,
+      username: userName,
       name: repoName,
     }).lean()
 

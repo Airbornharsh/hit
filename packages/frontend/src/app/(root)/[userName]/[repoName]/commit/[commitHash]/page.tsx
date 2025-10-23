@@ -17,7 +17,6 @@ import {
 } from 'lucide-react'
 import { CodeComparison } from '@/components/ui/code-comparison'
 import { FileTree } from '@/components/ui/file-tree'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface CommitPageProps {
@@ -30,7 +29,6 @@ interface CommitPageProps {
 
 export default function CommitPage({ params }: CommitPageProps) {
   const { userName, repoName, commitHash } = use(params)
-  const router = useRouter()
 
   const {
     commitDetails,
@@ -242,7 +240,7 @@ export default function CommitPage({ params }: CommitPageProps) {
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <Link
-              href={`/${userName}/${repoName}`}
+              href={`/${userName}/${repoName}/commits/${commit.branchName}`}
               className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
             >
               <ChevronLeft className="h-4 w-4" />

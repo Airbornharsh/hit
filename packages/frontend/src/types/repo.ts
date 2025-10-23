@@ -22,6 +22,7 @@ export interface Commit {
   _id: string
   repoId: string
   branchId: string
+  branchName: string
   hash: string
   parent: string
   message: string

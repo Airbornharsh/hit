@@ -59,6 +59,7 @@ class Middleware {
               clerkId: clerkUserId,
               isAdmin: dbUser.admin || false,
               name: dbUser.name,
+              username: dbUser.username,
             }
 
             next()
@@ -84,6 +85,7 @@ class Middleware {
               email: dbUser.email,
               isAdmin: dbUser.admin,
               name: dbUser.name,
+              username: dbUser.username,
             }
             next()
             return

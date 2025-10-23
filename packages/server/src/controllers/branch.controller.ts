@@ -48,20 +48,8 @@ class BranchController {
         remote as string,
       )
 
-      const userId = await db?.UserModel.findOne({
-        username: userName,
-      }).lean()
-
-      if (!userId || !userId?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch user',
-        })
-        return
-      }
-
       const repo = await db?.RepoModel.findOne({
-        userId: userId._id,
+        username: userName,
         name: repoName,
       }).lean()
 
@@ -126,21 +114,8 @@ class BranchController {
         remote as string,
       )
 
-      const user = await db?.UserModel.findOne({
-        username: userName,
-      }).lean()
-
-      if (!user || !user?._id) {
-        console.log('User not found')
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch user',
-        })
-        return
-      }
-
       const repo = await db?.RepoModel.findOne({
-        userId: user._id,
+        username: userName,
         name: repoName,
       }).lean()
 
@@ -228,19 +203,8 @@ class BranchController {
         remote as string,
       )
 
-      const userId = await db?.UserModel.findOne({
-        username: userName,
-      }).lean()
-
-      if (!userId || !userId?._id) {
-        res
-          .status(400)
-          .json({ success: false, message: 'Failed to fetch user' })
-        return
-      }
-
       const repo = await db?.RepoModel.findOne({
-        userId: userId._id,
+        username: userName,
         name: repoName,
       }).lean()
 

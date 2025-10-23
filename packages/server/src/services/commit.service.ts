@@ -85,16 +85,8 @@ class CommitService {
     const sortOrder = params?.sortOrder || 'desc'
     const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
 
-    const userId = await db?.UserModel.findOne({
-      username: userName,
-    }).lean()
-
-    if (!userId || !userId?._id) {
-      throw new Error('User not found')
-    }
-
     const repo = await db?.RepoModel.findOne({
-      userId: userId._id,
+      username: userName,
       name: repoName,
     }).lean()
 
@@ -164,6 +156,7 @@ class CommitService {
           _id: commit._id.toString(),
           repoId: commit.repoId.toString(),
           branchId: commit.branchId.toString(),
+          branchName: branch.name,
           hash: commit.hash,
           parent: commit.parent,
           message: commit.message,
@@ -211,16 +204,8 @@ class CommitService {
   }> {
     const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
 
-    const userId = await db?.UserModel.findOne({
-      username: userName,
-    }).lean()
-
-    if (!userId || !userId?._id) {
-      throw new Error('User not found')
-    }
-
     const repo = await db?.RepoModel.findOne({
-      userId: userId._id,
+      username: userName,
       name: repoName,
     }).lean()
 
@@ -247,6 +232,14 @@ class CommitService {
       (!parentCommit || !parentCommit?._id)
     ) {
       throw new Error('Parent commit not found')
+    }
+
+    const branch = await db?.BranchModel.findOne({
+      _id: commit.branchId,
+    }).lean()
+
+    if (!branch || !branch?._id) {
+      throw new Error('Branch not found')
     }
 
     let files: Map<
@@ -390,6 +383,7 @@ class CommitService {
         _id: commit._id.toString(),
         repoId: commit.repoId.toString(),
         branchId: commit.branchId.toString(),
+        branchName: branch.name,
         hash: commit.hash,
         parent: commit.parent,
         message: commit.message,

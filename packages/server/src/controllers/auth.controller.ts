@@ -253,6 +253,10 @@ class AuthController {
         return
       }
 
+      try {
+        await db?.RepoModel.updateMany({ userId }, { $set: { username } })
+      } catch (error) {}
+
       res.json({
         success: true,
         message: 'Username updated successfully',

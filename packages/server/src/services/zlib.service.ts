@@ -3,15 +3,17 @@ import zlib from 'zlib'
 import { CacheService } from './cache.service'
 
 class ZlibService {
+  // 20 mins cache for zlib decompression
   private static cache = CacheService.getInstance<string, string>({
     maxItems: 1000,
-    defaultTtlMs: 5 * 60 * 1000, // 5 minutes
+    defaultTtlMs: 20 * 60 * 1000, // 20 minutes
     sweepIntervalMs: 60 * 1000, // 1 minute
   })
 
   static async decompress(hash: string): Promise<string> {
     const cached = this.cache.get(hash)
     if (cached) {
+      this.cache.set(hash, cached)
       return cached
     }
 
