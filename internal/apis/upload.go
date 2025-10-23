@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/airbornharsh/hit/internal/go_types"
+	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/airbornharsh/hit/utils"
 )
 
@@ -23,6 +24,14 @@ func UploadFile(remote string, hash string) (string, error) {
 	}
 
 	token := utils.GetSession().Token
+
+	exists, hashUrl, err := storage.CheckHashUrlExists(hash)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		return hashUrl, nil
+	}
 
 	url := fmt.Sprintf(utils.BACKEND_URL+"/api/v1/repo/signed-url/%s?remote=%s", hash, remote)
 	req, err := http.NewRequest("GET", url, nil)
@@ -53,10 +62,6 @@ func UploadFile(remote string, hash string) (string, error) {
 
 	if !signedUploadUrlApiBody.Success {
 		return "", fmt.Errorf("API request failed: %s", signedUploadUrlApiBody.Message)
-	}
-
-	if signedUploadUrlApiBody.Data.Exists {
-		return signedUploadUrlApiBody.Data.PublicUrl, nil
 	}
 
 	req, err = http.NewRequest("PUT", signedUploadUrlApiBody.Data.SignedUrl, bytes.NewReader(file))

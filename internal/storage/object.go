@@ -110,3 +110,15 @@ func LoadObjectUrlCompressed(hash string) (string, error) {
 
 	return string(body), nil
 }
+
+func CheckHashUrlExists(hash string) (bool, string, error) {
+	url := fmt.Sprintf("https://media.harshkeshri.com/hit/%s/%s", hash[:2], hash[2:])
+
+	resp, err := http.Head(url)
+	if err != nil {
+		return false, "", err
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK, url, nil
+}

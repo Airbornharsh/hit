@@ -22,7 +22,6 @@ type SignedUploadUrlApiBody struct {
 	Data    struct {
 		SignedUrl string `json:"signedUrl"`
 		PublicUrl string `json:"publicUrl"`
-		Exists    bool   `json:"exists"`
 	} `json:"data"`
 }
 

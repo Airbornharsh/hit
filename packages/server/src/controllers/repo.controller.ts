@@ -11,31 +11,31 @@ class RepoController {
     try {
       const { hash } = req.params
 
-      const url = `https://media.harshkeshri.com/hit/${hash.slice(0, 2)}/${hash.slice(2)}`
+      // const url = `https://media.harshkeshri.com/hit/${hash.slice(0, 2)}/${hash.slice(2)}`
 
       const path = `hit/${hash.slice(0, 2)}/${hash.slice(2)}`
-      let exists = false
-      try {
-        const response = await axios.head(url)
-        if (response.status === 200) {
-          const publicUrl = R2CloudflareService.getPublicUrl(path)
-          exists = true
-          console.log('File found')
-          res.json({
-            success: true,
-            message: 'File found',
-            data: {
-              signedUrl: '',
-              publicUrl: publicUrl,
-              exists,
-            },
-          })
-          return
-        }
-      } catch (error) {
-        exists = false
-        console.log('File not found')
-      }
+      // let exists = false
+      // try {
+      //   const response = await axios.head(url)
+      //   if (response.status === 200) {
+      //     const publicUrl = R2CloudflareService.getPublicUrl(path)
+      //     exists = true
+      //     console.log('File found')
+      //     res.json({
+      //       success: true,
+      //       message: 'File found',
+      //       data: {
+      //         signedUrl: '',
+      //         publicUrl: publicUrl,
+      //         exists,
+      //       },
+      //     })
+      //     return
+      //   }
+      // } catch (error) {
+      //   exists = false
+      //   console.log('File not found')
+      // }
 
       const signedUrl = await R2CloudflareService.generateSignedUploadUrl(path)
 
@@ -45,7 +45,7 @@ class RepoController {
         data: {
           signedUrl: signedUrl.signedUrl,
           publicUrl: signedUrl.publicUrl,
-          exists,
+          // exists,
         },
       })
     } catch (error) {
