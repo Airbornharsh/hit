@@ -17,65 +17,10 @@ class RepoService {
       lastModified: string
     }[]
   }> {
-    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
-
-    const repoData = await db?.RepoModel.aggregate([
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $match: { 'user.username': userName, name: repoName } },
-      {
-        $lookup: {
-          from: 'branches',
-          localField: '_id',
-          foreignField: 'repoId',
-          as: 'branches',
-        },
-      },
-      {
-        $lookup: {
-          from: 'commits',
-          localField: 'branches.headCommit',
-          foreignField: '_id',
-          as: 'commits',
-        },
-      },
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          description: 1,
-          isPublic: 1,
-          defaultBranch: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          branches: {
-            $map: {
-              input: '$branches',
-              as: 'branch',
-              in: {
-                _id: '$$branch._id',
-                name: '$$branch.name',
-                headCommit: '$$branch.headCommit',
-              },
-            },
-          },
-          defaultBranchCommit: { $arrayElemAt: ['$commits', 0] },
-        },
-      },
-    ])
-
-    if (!repoData || repoData.length === 0) {
-      throw new Error('Repo not found')
-    }
-
-    const repo = repoData[0]
-    const defaultBranchCommit = repo.defaultBranchCommit
+    const { repo } = await RemoteService.getRepo(remote)
+    const { branches } = await RemoteService.getBranches(remote, {
+      limit: 1000,
+    })
 
     let files: {
       name: string
@@ -83,36 +28,33 @@ class RepoService {
       lastModified: string
     }[] = []
     let totalCommits = 0
+
     if (branchName) {
-      const branch = repoData[0].branches.find(
-        (branch: any) => branch.name === branchName,
-      )
-      if (!branch) {
+      const { commit } = await RemoteService.getHeadCommit(remote, branchName)
+      if (!commit) {
         throw new Error(`Branch '${branchName}' not found`)
       }
 
-      const latestCommit = await db?.CommitModel.findById(
-        branch.headCommit,
-      ).lean()
-      if (!latestCommit) {
-        throw new Error(`Commit '${branch.headCommit}' not found`)
-      }
-
-      files = await HashService.getRootFiles(latestCommit.hash)
-
+      files = await HashService.getRootFiles(commit.hash)
       totalCommits =
         (await db?.CommitModel.countDocuments({
           repoId: repo._id,
-          branchId: branch._id,
+          branchId: commit.branchId,
         })) || 0
     } else {
-      if (defaultBranchCommit && defaultBranchCommit.hash) {
-        files = await HashService.getRootFiles(defaultBranchCommit.hash)
-        totalCommits =
-          (await db?.CommitModel.countDocuments({
-            repoId: repo._id,
-            branchId: repo.defaultBranch,
-          })) || 0
+      const { branch } = await RemoteService.getDefaultBranch(remote)
+      if (branch.headCommit) {
+        const headCommit = await db?.CommitModel.findById(
+          branch.headCommit,
+        ).lean()
+        if (headCommit) {
+          files = await HashService.getRootFiles(headCommit.hash)
+          totalCommits =
+            (await db?.CommitModel.countDocuments({
+              repoId: repo._id,
+              branchId: branch._id,
+            })) || 0
+        }
       }
     }
 
@@ -127,7 +69,7 @@ class RepoService {
         updatedAt: repo.updatedAt,
       },
       totalCommits,
-      branches: repo.branches || [],
+      branches: branches.map((b) => b.name),
       files,
     }
   }

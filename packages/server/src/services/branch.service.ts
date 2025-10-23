@@ -25,29 +25,10 @@ class BranchService {
     files: FileItem[]
     path: string
   }> {
-    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
+    const { branch, repo } = await RemoteService.getBranch(remote, branchName)
+    const { commit } = await RemoteService.getHeadCommit(remote, branchName)
 
-    const repo = await db?.RepoModel.findOne({
-      username: userName,
-      name: repoName,
-    }).lean()
-
-    if (!repo || !repo?._id) {
-      throw new Error('Failed to fetch repo')
-    }
-
-    const branch = await db?.BranchModel.findOne({
-      name: branchName,
-      repoId: repo._id,
-    }).lean()
-
-    if (!branch || !branch?._id) {
-      throw new Error('Failed to fetch branch')
-    }
-
-    const headCommit = await db?.CommitModel.findById(branch.headCommit).lean()
-
-    if (!headCommit || !headCommit.hash) {
+    if (!commit || !commit.hash) {
       return {
         files: [],
         path: path,
@@ -55,7 +36,7 @@ class BranchService {
     }
 
     try {
-      const files = (await HashService.getFiles(headCommit.hash, path)) as any[]
+      const files = (await HashService.getFiles(commit.hash, path)) as any[]
 
       return {
         files: files.map((file) => ({
@@ -78,41 +59,22 @@ class BranchService {
     branchName: string,
     path: string,
   ): Promise<FileContent> {
-    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
+    const { branch, repo } = await RemoteService.getBranch(remote, branchName)
+    const { commit } = await RemoteService.getHeadCommit(remote, branchName)
 
-    const repo = await db?.RepoModel.findOne({
-      username: userName,
-      name: repoName,
-    }).lean()
-
-    if (!repo || !repo?._id) {
-      throw new Error('Failed to fetch repo')
-    }
-
-    const branch = await db?.BranchModel.findOne({
-      name: branchName,
-      repoId: repo._id,
-    }).lean()
-
-    if (!branch || !branch?._id) {
-      throw new Error('Failed to fetch branch')
-    }
-
-    const headCommit = await db?.CommitModel.findById(branch.headCommit).lean()
-
-    if (!headCommit || !headCommit.hash) {
+    if (!commit || !commit.hash) {
       throw new Error('No files found in this branch')
     }
 
     try {
-      const content = await HashService.getFile(headCommit.hash, path)
+      const content = await HashService.getFile(commit.hash, path)
       const size = new Blob([content]).size
 
       return {
         content,
         size,
         lastModified:
-          headCommit.timestamp?.toISOString() || new Date().toISOString(),
+          commit.timestamp?.toISOString() || new Date().toISOString(),
       }
     } catch (error) {
       console.error('Error getting file:', error)
@@ -132,41 +94,20 @@ class BranchService {
       children?: any[]
     }[]
   }> {
-    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
+    const { branch, repo } = await RemoteService.getBranch(remote, branchName)
+    const { commit } = await RemoteService.getHeadCommit(remote, branchName)
 
-    const repo = await db?.RepoModel.findOne({
-      username: userName,
-      name: repoName,
-    }).lean()
-
-    if (!repo || !repo?._id) {
-      throw new Error('Failed to fetch repo')
-    }
-
-    const branch = await db?.BranchModel.findOne({
-      name: branchName,
-      repoId: repo._id,
-    }).lean()
-
-    if (!branch || !branch?._id) {
-      throw new Error('Failed to fetch branch')
-    }
-
-    const headCommit = await db?.CommitModel.findById(branch.headCommit).lean()
-
-    if (!headCommit || !headCommit.hash) {
+    if (!commit || !commit.hash) {
       return {
         tree: [],
       }
     }
 
     try {
-      const tree = await HashService.getCompleteTreeStructure(headCommit.hash)
+      const tree = await HashService.getCompleteTreeStructure(commit.hash)
 
       if (tree.length === 0) {
-        const simpleTree = await HashService.getSimpleTreeStructure(
-          headCommit.hash,
-        )
+        const simpleTree = await HashService.getSimpleTreeStructure(commit.hash)
         return {
           tree: simpleTree,
         }
@@ -179,9 +120,7 @@ class BranchService {
       console.error('Error getting complete tree structure:', error)
 
       try {
-        const simpleTree = await HashService.getSimpleTreeStructure(
-          headCommit.hash,
-        )
+        const simpleTree = await HashService.getSimpleTreeStructure(commit.hash)
         return {
           tree: simpleTree,
         }

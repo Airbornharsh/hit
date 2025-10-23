@@ -79,71 +79,38 @@ class CommitService {
     }[]
     pagination: PaginationMeta
   }> {
-    const page = params?.page || 1
-    const limit = params?.limit || 20
-    const sortBy = params?.sortBy || 'timestamp'
-    const sortOrder = params?.sortOrder || 'desc'
-    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
+    const { branch, repo } = await RemoteService.getBranch(remote, branchName)
+    const { commits, pagination } = await RemoteService.getCommits(
+      remote,
+      branchName,
+      {
+        page: params?.page,
+        limit: params?.limit,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+        author: params?.author,
+        startDate: params?.startDate,
+        endDate: params?.endDate,
+      },
+    )
 
-    const repo = await db?.RepoModel.findOne({
-      username: userName,
-      name: repoName,
-    }).lean()
-
-    if (!repo || !repo?._id) {
-      throw new Error('Repo not found')
-    }
-
-    const branch = await db?.BranchModel.findOne({
-      name: branchName,
-      repoId: repo._id,
-    }).lean()
-
-    if (!branch || !branch?._id) {
-      throw new Error('Branch not found')
-    }
-
-    const filterQuery: any = { branchId: branch._id }
-
-    if (params?.author && params.author !== 'all') {
-      filterQuery.author = params.author
-    }
-
-    if (params?.startDate || params?.endDate) {
-      filterQuery.timestamp = {}
-      if (params.startDate) {
-        filterQuery.timestamp.$gte = new Date(params.startDate)
-      }
-      if (params.endDate) {
-        filterQuery.timestamp.$lte = new Date(params.endDate)
-      }
-    }
-
-    const [commits, total, authors] = await Promise.all([
-      db?.CommitModel.find(filterQuery)
-        .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      db?.CommitModel.countDocuments(filterQuery).lean(),
-      await db?.CommitModel.aggregate([
-        {
-          $match: {
-            branchId: branch._id,
-          },
+    const authors = await db?.CommitModel.aggregate([
+      {
+        $match: {
+          branchId: branch._id,
         },
-        {
-          $group: {
-            _id: '$author',
-          },
+      },
+      {
+        $group: {
+          _id: '$author',
         },
-        {
-          $project: {
-            _id: 0,
-            author: '$_id',
-          },
+      },
+      {
+        $project: {
+          _id: 0,
+          author: '$_id',
         },
-      ]),
+      },
     ])
 
     const users = await db?.UserModel.find({
@@ -151,18 +118,17 @@ class CommitService {
     }).lean()
 
     return {
-      commits:
-        commits?.map((commit) => ({
-          _id: commit._id.toString(),
-          repoId: commit.repoId.toString(),
-          branchId: commit.branchId.toString(),
-          branchName: branch.name,
-          hash: commit.hash,
-          parent: commit.parent,
-          message: commit.message,
-          timestamp: commit.timestamp,
-          author: commit.author,
-        })) || [],
+      commits: commits.map((commit) => ({
+        _id: (commit._id as any).toString(),
+        repoId: (commit.repoId as any).toString(),
+        branchId: (commit.branchId as any).toString(),
+        branchName: branch.name,
+        hash: commit.hash,
+        parent: commit.parent,
+        message: commit.message,
+        timestamp: commit.timestamp,
+        author: commit.author,
+      })),
       users: (
         users?.map((user) => ({
           _id: user._id.toString(),
@@ -171,14 +137,7 @@ class CommitService {
           email: user.email,
         })) || []
       ).filter((user) => user.username),
-      pagination: {
-        page,
-        limit,
-        total: total || 0,
-        totalPages: Math.ceil(total || 0 / limit),
-        hasNext: page < Math.ceil(total || 0 / limit),
-        hasPrev: page > 1,
-      },
+      pagination,
     }
   }
 
@@ -202,25 +161,10 @@ class CommitService {
       deletions: number
     }
   }> {
-    const { userName, repoName } = await RemoteService.remoteBreakdown(remote)
-
-    const repo = await db?.RepoModel.findOne({
-      username: userName,
-      name: repoName,
-    }).lean()
-
-    if (!repo || !repo?._id) {
-      throw new Error('Repo not found')
-    }
-
-    const commit = await db?.CommitModel.findOne({
-      hash: commitHash,
-      repoId: repo._id,
-    }).lean()
-
-    if (!commit || !commit?._id || commit.hash !== commitHash) {
-      throw new Error('Commit not found')
-    }
+    const { commit, repo, branch } = await RemoteService.getCommitWithBranch(
+      remote,
+      commitHash,
+    )
 
     const parentCommit = await db?.CommitModel.findOne({
       repoId: repo._id,
@@ -232,14 +176,6 @@ class CommitService {
       (!parentCommit || !parentCommit?._id)
     ) {
       throw new Error('Parent commit not found')
-    }
-
-    const branch = await db?.BranchModel.findOne({
-      _id: commit.branchId,
-    }).lean()
-
-    if (!branch || !branch?._id) {
-      throw new Error('Branch not found')
     }
 
     let files: Map<
@@ -380,9 +316,9 @@ class CommitService {
 
     return {
       commit: {
-        _id: commit._id.toString(),
-        repoId: commit.repoId.toString(),
-        branchId: commit.branchId.toString(),
+        _id: (commit._id as any).toString(),
+        repoId: (commit.repoId as any).toString(),
+        branchId: (commit.branchId as any).toString(),
         branchName: branch.name,
         hash: commit.hash,
         parent: commit.parent,

@@ -62,29 +62,7 @@ class RepoController {
       const { hash } = req.params
       const { remote } = req.query
 
-      const { userName, repoName } = await RemoteService.remoteBreakdown(
-        remote as string,
-      )
-      const userId = await db?.UserModel.findOne({ username: userName }).lean()
-      if (!userId || !userId?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'User not found',
-        })
-        return
-      }
-
-      const repo = await db?.RepoModel.findOne({
-        userId: userId._id,
-        name: repoName,
-      }).lean()
-      if (!repo || !repo?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Repo not found',
-        })
-        return
-      }
+      const { repo } = await RemoteService.getRepo(remote as string)
 
       try {
         await db?.HashModel.create({ hash, repoId: repo._id })

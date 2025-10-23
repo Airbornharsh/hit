@@ -44,55 +44,19 @@ class BranchController {
     try {
       const { page = 1, limit = 100, remote } = req.query
 
-      const { userName, repoName } = await RemoteService.remoteBreakdown(
-        remote as string,
-      )
-
-      const repo = await db?.RepoModel.findOne({
-        username: userName,
-        name: repoName,
-      }).lean()
-
-      if (!repo || !repo?._id) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch repo',
-        })
-        return
-      }
-
-      const skip = (Number(page) - 1) * Number(limit)
-
-      const [branches, total] = await Promise.all([
-        db?.BranchModel.find({ repoId: repo._id })
-          .skip(skip)
-          .limit(Number(limit))
-          .sort({ createdAt: -1 })
-          .lean(),
-        db?.BranchModel.countDocuments({ repoId: repo._id }).lean(),
-      ])
-
-      if (!branches) {
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch branches',
-        })
-        return
-      }
+      const result = await RemoteService.getBranches(remote as string, {
+        page: Number(page),
+        limit: Number(limit),
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      })
 
       res.json({
         success: true,
         message: 'Branches fetched successfully',
         data: {
-          branches,
-          pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total: total || 0,
-            totalPages: Math.ceil(total || 0 / Number(limit)),
-            hasNext: Number(page) < Math.ceil(total || 0 / Number(limit)),
-            hasPrev: Number(page) > 1,
-          },
+          branches: result.branches,
+          pagination: result.pagination,
         },
       })
     } catch (error) {
@@ -110,58 +74,26 @@ class BranchController {
       const { branchName } = req.params
       const { remote } = req.query
 
-      const { userName, repoName } = await RemoteService.remoteBreakdown(
+      const { commit, branch, repo } = await RemoteService.getHeadCommit(
         remote as string,
+        branchName,
       )
-
-      const repo = await db?.RepoModel.findOne({
-        username: userName,
-        name: repoName,
-      }).lean()
-
-      if (!repo || !repo?._id) {
-        console.log('Repo not found')
-        res.status(400).json({
-          success: false,
-          message: 'Failed to fetch repo',
-        })
-        return
-      }
-
-      const branch = await db?.BranchModel.findOne({
-        repoId: repo._id,
-        name: branchName,
-      }).lean()
-
-      if (!branch || !branch?._id) {
-        res.status(200).json({
-          success: true,
-          message: 'Branch not found',
-          data: {
-            exists: false,
-            headCommit: null,
-          },
-        })
-        return
-      }
-
-      const headCommit = await db?.CommitModel.findById(
-        branch.headCommit,
-      ).lean()
 
       res.json({
         success: true,
         message: 'Head commit fetched successfully',
         data: {
-          exists: headCommit ? true : false,
-          headCommit: {
-            _id: headCommit?._id || null,
-            message: headCommit?.message || null,
-            author: headCommit?.author || null,
-            timestamp: headCommit?.timestamp || null,
-            hash: headCommit?.hash || null,
-            parent: headCommit?.parent || null,
-          },
+          exists: commit ? true : false,
+          headCommit: commit
+            ? {
+                _id: commit._id,
+                message: commit.message,
+                author: commit.author,
+                timestamp: commit.timestamp,
+                hash: commit.hash,
+                parent: commit.parent,
+              }
+            : null,
         },
       })
     } catch (error) {
@@ -199,31 +131,23 @@ class BranchController {
         }
       }
 
-      const { userName, repoName } = await RemoteService.remoteBreakdown(
+      const { repo } = await RemoteService.getRepo(remote as string)
+
+      const branchExists = await RemoteService.branchExists(
         remote as string,
+        branchName,
       )
+      let branchId: string
 
-      const repo = await db?.RepoModel.findOne({
-        username: userName,
-        name: repoName,
-      }).lean()
-
-      if (!repo || !repo?._id) {
-        res
-          .status(400)
-          .json({ success: false, message: 'Failed to fetch repo' })
-        return
-      }
-
-      const branch = await db?.BranchModel.findOne({
-        name: branchName,
-        repoId: repo._id,
-      }).lean()
-
-      let branchId = branch?._id.toString()
-      if (!branchId) {
+      if (branchExists) {
+        const { branch } = await RemoteService.getBranch(
+          remote as string,
+          branchName,
+        )
+        branchId = (branch._id as any).toString()
+      } else {
         const newBranch = await db?.BranchModel.create({
-          repoId: repo._id,
+          repoId: repo._id as any,
           name: branchName,
         })
         if (!newBranch || !newBranch?._id) {
@@ -238,7 +162,7 @@ class BranchController {
 
       if (commits.length) {
         await CommitService.createCommits(
-          repo._id.toString(),
+          (repo._id as any).toString(),
           branchId,
           commits,
         )
@@ -273,29 +197,26 @@ class BranchController {
         endDate,
       } = req.query
 
-      const paginationParams = {
-        page: page ? parseInt(page as string) : undefined,
-        limit: limit ? parseInt(limit as string) : undefined,
-        sortBy: sortBy as string,
-        sortOrder: sortOrder as 'asc' | 'desc',
-        author: author as string,
-        startDate: startDate as string,
-        endDate: endDate as string,
-      }
-
-      const commits = await CommitService.getCommits(
+      const result = await RemoteService.getCommits(
         remote as string,
         branchName,
-        paginationParams,
+        {
+          page: page ? parseInt(page as string) : undefined,
+          limit: limit ? parseInt(limit as string) : undefined,
+          sortBy: sortBy as string,
+          sortOrder: sortOrder as 'asc' | 'desc',
+          author: author as string,
+          startDate: startDate as string,
+          endDate: endDate as string,
+        },
       )
 
       res.json({
         success: true,
         message: 'Commits fetched successfully',
         data: {
-          commits: commits.commits,
-          users: commits.users,
-          pagination: commits.pagination,
+          commits: result.commits,
+          pagination: result.pagination,
         },
       })
     } catch (error) {
@@ -312,6 +233,11 @@ class BranchController {
     try {
       const { commitHash } = req.params
       const { remote } = req.query
+
+      const { commit, repo, branch } = await RemoteService.getCommitWithBranch(
+        remote as string,
+        commitHash,
+      )
 
       const commitDetails = await CommitService.getCommitDetails(
         remote as string,
@@ -351,10 +277,20 @@ class BranchController {
       const { branchName } = req.params
       const { remote, path } = req.query
 
+      const normalizedPath = RemoteService.parseAndNormalizePath(path as string)
+
+      if (!RemoteService.isValidPath(normalizedPath)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid path provided',
+        })
+        return
+      }
+
       const result = await BranchService.getFiles(
         remote as string,
         branchName,
-        (path as string) || '',
+        normalizedPath,
       )
 
       res.json({
@@ -385,10 +321,20 @@ class BranchController {
         return
       }
 
+      const normalizedPath = RemoteService.parseAndNormalizePath(path as string)
+
+      if (!RemoteService.isValidPath(normalizedPath)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid path provided',
+        })
+        return
+      }
+
       const file = await BranchService.getFile(
         remote as string,
         branchName,
-        path as string,
+        normalizedPath,
       )
 
       res.json({
