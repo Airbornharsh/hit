@@ -42,18 +42,20 @@ class RepoService {
           branchId: commit.branchId,
         })) || 0
     } else {
-      const { branch } = await RemoteService.getDefaultBranch(remote)
-      if (branch.headCommit) {
-        const headCommit = await db?.CommitModel.findById(
-          branch.headCommit,
-        ).lean()
-        if (headCommit) {
-          files = await HashService.getRootFiles(headCommit.hash)
-          totalCommits =
-            (await db?.CommitModel.countDocuments({
-              repoId: repo._id,
-              branchId: branch._id,
-            })) || 0
+      if (branches.length > 0) {
+        const { branch } = await RemoteService.getDefaultBranch(remote)
+        if (branch.headCommit) {
+          const headCommit = await db?.CommitModel.findById(
+            branch.headCommit,
+          ).lean()
+          if (headCommit) {
+            files = await HashService.getRootFiles(headCommit.hash)
+            totalCommits =
+              (await db?.CommitModel.countDocuments({
+                repoId: repo._id,
+                branchId: branch._id,
+              })) || 0
+          }
         }
       }
     }
