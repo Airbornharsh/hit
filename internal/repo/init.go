@@ -127,9 +127,16 @@ func InitializeIndex() {
 func collectAllFiles(rootDir string) map[string]bool {
 	existingFiles := make(map[string]bool)
 
-	ignoreMatcher, err := NewIgnoreMatcher(rootDir)
+	ignoreMatcher, err := storage.GetIgnoreMatcher()
 	if err != nil {
-		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+		repoRoot, err := storage.FindRepoRoot()
+		if err != nil {
+			return existingFiles
+		}
+		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
+		if err != nil {
+			return existingFiles
+		}
 	}
 
 	var collectFiles func(dir string)

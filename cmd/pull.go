@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/airbornharsh/hit/internal/repo"
-	"github.com/airbornharsh/hit/utils"
+	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +21,7 @@ Examples:
   hit pull                  # Pull from default remote`,
 	Args: cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		targetBranch, _ := utils.GetBranch()
+		targetBranch, _ := storage.GetBranch()
 		remoteName := "origin"
 		if len(args) == 1 {
 			remoteName = args[0]

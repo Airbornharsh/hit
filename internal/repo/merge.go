@@ -23,8 +23,26 @@ func MergeBranch(currentBranch string, targetBranch string, remoteName string) e
 		return fmt.Errorf("failed to get target branch commit: %v", err)
 	}
 
-	if targetCommit == currentCommit {
-		fmt.Println("Already up to date")
+	if isAlreadyMerged(remoteName, targetBranch, currentCommit, targetCommit) {
+		remoteCommits, err := storage.GetRemoteCommits(remoteName, targetBranch)
+		if err != nil {
+			return fmt.Errorf("failed to get remote commits: %v", err)
+		}
+		err = storage.UpdateHeadCommits(currentBranch, remoteCommits)
+		if err != nil {
+			return fmt.Errorf("failed to update head commits: %v", err)
+		}
+
+		err = storage.UpdateHeadRef(currentBranch, targetCommit)
+		if err != nil {
+			return fmt.Errorf("failed to update head ref: %v", err)
+		}
+
+		err = storage.UpdateWorkingDirectoryAndIndexFromCommit(targetCommit)
+		if err != nil {
+			return fmt.Errorf("failed to update working directory and index: %v", err)
+		}
+
 		return nil
 	}
 
@@ -39,20 +57,14 @@ func MergeBranch(currentBranch string, targetBranch string, remoteName string) e
 			return fmt.Errorf("failed to perform fast-forward merge: %v", err)
 		}
 		return nil
-	} else {
-		return fmt.Errorf("only fast-forward merge is possible")
 	}
 
-	conflicts, err := detectThreeWayConflicts(currentCommit, targetCommit, commonAncestor)
+	_, err = detectThreeWayConflicts(currentCommit, targetCommit, commonAncestor)
 	if err != nil {
 		return fmt.Errorf("failed to detect three-way conflicts: %v", err)
 	}
 
-	if len(conflicts) > 0 {
-		return fmt.Errorf("conflicts detected in the following files: %v", conflicts)
-	}
-
-	err = performThreeWayMerge(currentBranch, targetCommit, targetBranch)
+	err = performThreeWayMerge(remoteName, currentCommit, targetCommit, currentBranch, targetBranch, commonAncestor)
 	if err != nil {
 		return fmt.Errorf("failed to perform three-way merge: %v", err)
 	}
@@ -108,13 +120,13 @@ func getAllAncestors(commitHash string) ([]string, error) {
 
 	var traverse func(string) error
 	traverse = func(hash string) error {
-		if visited[hash] {
+		if visited[hash] || hash == "0000000000000000000000000000000000000000" {
 			return nil
 		}
 		visited[hash] = true
 		ancestors = append(ancestors, hash)
 
-		commit, err := getCommitObject(hash)
+		commit, err := storage.GetCommitObject(hash)
 		if err != nil {
 			return err
 		}
@@ -125,25 +137,30 @@ func getAllAncestors(commitHash string) ([]string, error) {
 			}
 		}
 
+		if commit.OtherParent != "" && commit.OtherParent != "0000000000000000000000000000000000000000" {
+			if err := traverse(commit.OtherParent); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 
 	return ancestors, traverse(commitHash)
 }
 
-// Conflict Fix
 func detectThreeWayConflicts(currentCommit, targetCommit, commonAncestor string) ([]string, error) {
-	currentTree, err := getCommitTree(currentCommit)
+	currentTree, err := storage.GetCommitTree(currentCommit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current commit tree: %v", err)
 	}
 
-	targetTree, err := getCommitTree(targetCommit)
+	targetTree, err := storage.GetCommitTree(targetCommit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get target commit tree: %v", err)
 	}
 
-	ancestorTree, err := getCommitTree(commonAncestor)
+	ancestorTree, err := storage.GetCommitTree(commonAncestor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ancestor commit tree: %v", err)
 	}
@@ -185,26 +202,50 @@ func hasThreeWayConflict(current, target, ancestor string) bool {
 	return true
 }
 
-func performThreeWayMerge(currentBranch, targetCommit, branchName string) error {
-	fmt.Printf("Creating merge commit for three-way merge...\n")
+func isAlreadyMerged(remoteName, targetBranch, currentCommit, targetCommit string) bool {
+	remoteCommits, err := storage.GetRemoteCommits(remoteName, targetBranch)
+	if err != nil {
+		return false
+	}
 
-	mergeCommit, err := createMergeCommit(currentBranch, targetCommit, branchName)
+	currentCommitExists := false
+	for _, commit := range remoteCommits {
+		if commit.Hash == currentCommit {
+			currentCommitExists = true
+		}
+		if currentCommitExists && commit.OtherParent == currentCommit {
+			return true
+		}
+	}
+
+	return false
+}
+
+func performThreeWayMerge(remoteName, currentCommit, targetCommit, currentBranch, targetBranch, commonAncestor string) error {
+	fmt.Printf("Performing three-way merge...\n")
+
+	mergedTree, err := performThreeWayFileMerge(currentCommit, targetCommit, commonAncestor)
+	if err != nil {
+		return fmt.Errorf("failed to perform three-way file merge: %v", err)
+	}
+
+	mergeCommit, err := createMergeCommitWithTree(currentCommit, targetCommit, currentBranch, targetBranch, mergedTree)
 	if err != nil {
 		return fmt.Errorf("failed to create merge commit: %v", err)
 	}
 
 	refPath := filepath.Join(".hit", "refs", "heads", currentBranch)
-	err = os.WriteFile(refPath, []byte(mergeCommit), 0644)
+	err = os.WriteFile(refPath, []byte(mergeCommit.Hash), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to update branch reference: %v", err)
 	}
 
-	err = updateWorkingDirectoryFromCommit(mergeCommit)
+	err = storage.UpdateWorkingDirectoryAndIndexFromCommit(mergeCommit.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to update working directory: %v", err)
 	}
 
-	err = updateLocalLog(currentBranch, mergeCommit)
+	err = updateLocalLog(remoteName, currentBranch, mergeCommit)
 	if err != nil {
 		return fmt.Errorf("failed to update local log: %v", err)
 	}
@@ -213,8 +254,9 @@ func performThreeWayMerge(currentBranch, targetCommit, branchName string) error 
 	return nil
 }
 
-func updateLocalLog(branchName, commitHash string) error {
+func updateLocalLog(remoteName, branchName string, commit *go_types.Commit) error {
 	logPath := filepath.Join(".hit", "logs", "refs", "heads", branchName)
+	logRemotePath := filepath.Join(".hit", "logs", "refs", "remotes", remoteName, branchName)
 
 	var commits []go_types.Commit
 	logData, err := os.ReadFile(logPath)
@@ -227,12 +269,39 @@ func updateLocalLog(branchName, commitHash string) error {
 		}
 	}
 
-	commit, err := getCommitObject(commitHash)
+	var remoteCommits []go_types.Commit
+	logRemoteData, err := os.ReadFile(logRemotePath)
 	if err != nil {
-		return fmt.Errorf("failed to get commit object: %v", err)
+		remoteCommits = []go_types.Commit{}
+	} else {
+		err = json.Unmarshal(logRemoteData, &remoteCommits)
+		if err != nil {
+			return fmt.Errorf("failed to parse existing log: %v", err)
+		}
 	}
 
 	commits = append(commits, *commit)
+
+	commitExists := make(map[string]bool)
+	for _, commit := range commits {
+		commitExists[commit.Hash] = true
+	}
+
+	for _, commit := range remoteCommits {
+		if commitExists[commit.Hash] {
+			continue
+		}
+		commits = append(commits, commit)
+	}
+
+	slices.SortFunc(commits, func(a, b go_types.Commit) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return -1
+		} else if a.Timestamp.After(b.Timestamp) {
+			return 1
+		}
+		return 0
+	})
 
 	updatedLogData, err := json.Marshal(commits)
 	if err != nil {
@@ -247,82 +316,6 @@ func updateLocalLog(branchName, commitHash string) error {
 	return nil
 }
 
-func getCommitObject(commitHash string) (*go_types.Commit, error) {
-	if commitHash == "0000000000000000000000000000000000000000" {
-		return &go_types.Commit{
-			Hash:   commitHash,
-			Parent: "",
-		}, nil
-	}
-
-	commitData, err := storage.LoadObject(commitHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load commit object: %v", err)
-	}
-
-	var commit go_types.Commit
-	err = json.Unmarshal([]byte(commitData), &commit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse commit object: %v", err)
-	}
-
-	return &commit, nil
-}
-
-func getCommitTree(commitHash string) (*go_types.Tree, error) {
-	if commitHash == "0000000000000000000000000000000000000000" {
-		return &go_types.Tree{
-			Entries: make(map[string]string),
-			Parent:  "",
-		}, nil
-	}
-
-	commitData, err := storage.LoadObject(commitHash)
-	if err != nil {
-		return nil, err
-	}
-
-	var tree go_types.Tree
-	err = json.Unmarshal([]byte(commitData), &tree)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tree, nil
-}
-
-func createMergeCommit(currentBranch, targetCommit, branchName string) (string, error) {
-	currentCommit, err := getLocalBranchCommit(currentBranch)
-	if err != nil {
-		return "", err
-	}
-
-	message := fmt.Sprintf("Merge branch '%s' into %s", branchName, currentBranch)
-
-	commit := go_types.Commit{
-		Hash:      "",
-		Parent:    currentCommit,
-		Message:   message,
-		Author:    "HIT User",
-		Timestamp: go_types.TimeNow(),
-	}
-
-	commitData, err := json.Marshal(commit)
-	if err != nil {
-		return "", err
-	}
-
-	commitHash := storage.Hash(commitData)
-	commit.Hash = commitHash
-
-	err = storage.WriteObject(commitHash, commitData)
-	if err != nil {
-		return "", err
-	}
-
-	return commitHash, nil
-}
-
 func performFastForwardMerge(remoteName, currentBranch, targetCommit string) error {
 	refPath := filepath.Join(".hit", "refs", "heads", currentBranch)
 	err := os.WriteFile(refPath, []byte(targetCommit), 0644)
@@ -330,9 +323,9 @@ func performFastForwardMerge(remoteName, currentBranch, targetCommit string) err
 		return fmt.Errorf("failed to update branch reference: %v", err)
 	}
 
-	err = updateWorkingDirectoryFromCommit(targetCommit)
+	err = storage.UpdateWorkingDirectoryAndIndexFromCommit(targetCommit)
 	if err != nil {
-		return fmt.Errorf("failed to update working directory: %v", err)
+		return fmt.Errorf("failed to update working directory and index: %v", err)
 	}
 
 	err = updateLocalLogWithRemoteCommits(remoteName, currentBranch)
@@ -343,70 +336,169 @@ func performFastForwardMerge(remoteName, currentBranch, targetCommit string) err
 	return nil
 }
 
-func updateWorkingDirectoryFromCommit(commitHash string) error {
-	tree, err := getCommitTree(commitHash)
-	if err != nil {
-		return err
-	}
-	index := &go_types.Index{
-		Entries: tree.Entries,
-		Changed: true,
-	}
-
-	indexPath := filepath.Join(".hit", "index.json")
-	indexData, err := json.MarshalIndent(index, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	err = os.WriteFile(indexPath, indexData, 0644)
-	if err != nil {
-		return err
-	}
-
-	for filePath, objectHash := range tree.Entries {
-		err := restoreFileFromObject(filePath, objectHash)
-		if err != nil {
-			return fmt.Errorf("failed to restore file %s: %v", filePath, err)
-		}
-	}
-
-	return nil
-}
-
 func updateLocalLogWithRemoteCommits(remoteName, branchName string) error {
-	logPath := filepath.Join(".hit", "logs", "refs", "heads", branchName)
-
-	remoteCommits, err := getAllCommitsFromRemote(remoteName, branchName)
+	remoteCommits, err := storage.GetRemoteCommits(remoteName, branchName)
 	if err != nil {
 		return fmt.Errorf("failed to get remote commits: %v", err)
 	}
 
-	updatedLogData, err := json.Marshal(remoteCommits)
+	err = storage.UpdateHeadCommits(branchName, remoteCommits)
 	if err != nil {
-		return fmt.Errorf("failed to marshal updated log: %v", err)
+		return fmt.Errorf("failed to update head commits: %v", err)
 	}
 
-	err = os.WriteFile(logPath, updatedLogData, 0644)
+	err = storage.UpdateHeadRef(branchName, remoteCommits[len(remoteCommits)-1].Hash)
 	if err != nil {
-		return fmt.Errorf("failed to write updated log: %v", err)
+		return fmt.Errorf("failed to update head ref: %v", err)
 	}
 
 	return nil
 }
 
-func getAllCommitsFromRemote(remoteName, branchName string) ([]go_types.Commit, error) {
-	var commits []go_types.Commit
-
-	remoteBranchLogPath := filepath.Join(".hit", "logs", "refs", "remotes", remoteName, branchName)
-	remoteBranchLogFile, err := os.ReadFile(remoteBranchLogPath)
+func performThreeWayFileMerge(currentCommit, targetCommit, commonAncestor string) (*go_types.Tree, error) {
+	currentTree, err := storage.GetCommitTree(currentCommit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read remote branch log: %v", err)
-	}
-	err = json.Unmarshal(remoteBranchLogFile, &commits)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse remote branch log: %v", err)
+		return nil, fmt.Errorf("failed to get current tree: %v", err)
 	}
 
-	return commits, nil
+	targetTree, err := storage.GetCommitTree(targetCommit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target tree: %v", err)
+	}
+
+	ancestorTree, err := storage.GetCommitTree(commonAncestor)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ancestor tree: %v", err)
+	}
+
+	allFiles := make(map[string]bool)
+	for file := range currentTree.Entries {
+		allFiles[file] = true
+	}
+	for file := range targetTree.Entries {
+		allFiles[file] = true
+	}
+	for file := range ancestorTree.Entries {
+		allFiles[file] = true
+	}
+
+	mergedTree := &go_types.Tree{
+		Entries: make(map[string]string),
+		Parent:  "",
+	}
+
+	for file := range allFiles {
+		currentHash := currentTree.Entries[file]
+		targetHash := targetTree.Entries[file]
+		ancestorHash := ancestorTree.Entries[file]
+
+		mergedHash, err := mergeFileThreeWay(currentHash, targetHash, ancestorHash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge file %s: %v", file, err)
+		}
+
+		if mergedHash != "" {
+			mergedTree.Entries[file] = mergedHash
+		}
+	}
+
+	treeData, err := json.Marshal(mergedTree)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged tree: %v", err)
+	}
+
+	treeHash := storage.Hash(treeData)
+	err = storage.WriteObject(treeHash, treeData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store merged tree: %v", err)
+	}
+
+	return mergedTree, nil
+}
+
+func mergeFileThreeWay(currentHash, targetHash, ancestorHash string) (string, error) {
+	if currentHash == targetHash || targetHash == ancestorHash {
+		return currentHash, nil
+	}
+
+	if currentHash == ancestorHash {
+		return targetHash, nil
+	}
+
+	return mergeFileContent(currentHash, targetHash, ancestorHash)
+}
+
+func mergeFileContent(currentHash, targetHash, ancestorHash string) (string, error) {
+	currentContent, err := getFileContent(currentHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current content: %v", err)
+	}
+
+	targetContent, err := getFileContent(targetHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to get target content: %v", err)
+	}
+
+	ancestorContent, err := getFileContent(ancestorHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to get ancestor content: %v", err)
+	}
+
+	mergedContent := currentContent
+	if targetContent != ancestorContent {
+		mergedContent = currentContent + "\n" + targetContent
+	}
+
+	contentBytes := []byte(mergedContent)
+	contentHash := storage.Hash(contentBytes)
+	err = storage.WriteObject(contentHash, contentBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to store merged content: %v", err)
+	}
+
+	return contentHash, nil
+}
+
+func getFileContent(hash string) (string, error) {
+	if hash == "" {
+		return "", nil
+	}
+
+	content, err := storage.LoadObject(hash)
+	if err != nil {
+		return "", err
+	}
+
+	return content, nil
+}
+
+func createMergeCommitWithTree(currentCommit, targetCommit, currentBranch, targetBranch string, tree *go_types.Tree) (*go_types.Commit, error) {
+	var message string
+	if targetBranch == currentBranch {
+		message = fmt.Sprintf("Merging Commit %s into %s", targetCommit, currentCommit)
+	} else {
+		message = fmt.Sprintf("Merge branch '%s' into %s", targetBranch, currentBranch)
+	}
+
+	treeData, err := json.Marshal(tree)
+	if err != nil {
+		return nil, err
+	}
+
+	treeHash := storage.Hash(treeData)
+	err = storage.WriteObject(treeHash, treeData)
+	if err != nil {
+		return nil, err
+	}
+
+	commit := go_types.Commit{
+		Hash:        treeHash,
+		Parent:      currentCommit,
+		OtherParent: targetCommit,
+		Message:     message,
+		Author:      os.Getenv("USER"),
+		Timestamp:   go_types.TimeNow(),
+	}
+
+	return &commit, nil
 }

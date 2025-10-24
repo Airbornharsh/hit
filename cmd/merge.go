@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/airbornharsh/hit/internal/repo"
-	"github.com/airbornharsh/hit/utils"
+	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +18,7 @@ Examples:
   hit merge origin main       # Merge remote main branch`,
 	Args: cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		targetBranch, _ := utils.GetBranch()
+		targetBranch, _ := storage.GetBranch()
 		remoteName := "origin"
 		currentBranch := targetBranch
 		if len(args) == 1 {

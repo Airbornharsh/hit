@@ -1,4 +1,4 @@
-package repo
+package storage
 
 import (
 	"bufio"
@@ -213,7 +213,7 @@ func (im *IgnoreMatcher) matchesWildcard(filePath, pattern string) bool {
 }
 
 func GetIgnoreMatcher() (*IgnoreMatcher, error) {
-	repoRoot, err := getRepoRoot()
+	repoRoot, err := FindRepoRoot()
 	if err != nil {
 		return nil, err
 	}

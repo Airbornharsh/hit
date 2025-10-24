@@ -10,7 +10,6 @@ import (
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/repo"
 	"github.com/airbornharsh/hit/internal/storage"
-	"github.com/airbornharsh/hit/utils"
 )
 
 func CreateCommit(message string) (string, error) {
@@ -19,7 +18,7 @@ func CreateCommit(message string) (string, error) {
 		return "", err
 	}
 
-	currentBranch, err := utils.GetBranch()
+	currentBranch, err := storage.GetBranch()
 	if err != nil {
 		return "", err
 	}
@@ -60,7 +59,7 @@ func CreateCommit(message string) (string, error) {
 }
 
 func LogCommits() {
-	head, err := utils.GetHead()
+	head, err := storage.GetHead()
 	if err != nil {
 		fmt.Println("Error getting HEAD:", err)
 		return

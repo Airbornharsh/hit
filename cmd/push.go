@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/airbornharsh/hit/internal/repo"
-	"github.com/airbornharsh/hit/utils"
+	"github.com/airbornharsh/hit/internal/storage"
 
 	"github.com/spf13/cobra"
 )
@@ -43,7 +43,7 @@ var pushCmd = &cobra.Command{
 		}
 
 		if branchName == "" {
-			currentBranch, err := utils.GetBranch()
+			currentBranch, err := storage.GetBranch()
 			if err != nil {
 				fmt.Printf("Error getting current branch: %v\n", err)
 				return

@@ -9,11 +9,10 @@ import (
 
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
-	"github.com/airbornharsh/hit/utils"
 )
 
 func DiffWorkingVsIndex() {
-	repoRoot, err := utils.FindRepoRoot()
+	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {
 		fmt.Println("Not a hit repository")
 		return
@@ -25,9 +24,16 @@ func DiffWorkingVsIndex() {
 		_ = json.Unmarshal(data, index)
 	}
 
-	ignoreMatcher, err := NewIgnoreMatcher(repoRoot)
+	ignoreMatcher, err := storage.GetIgnoreMatcher()
 	if err != nil {
-		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+		repoRoot, err := storage.FindRepoRoot()
+		if err != nil {
+			return
+		}
+		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
+		if err != nil {
+			return
+		}
 	}
 
 	working := make(map[string]string)
@@ -89,7 +95,7 @@ func DiffWorkingVsIndex() {
 }
 
 func DiffIndexVsHead() {
-	repoRoot, err := utils.FindRepoRoot()
+	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {
 		fmt.Println("Not a hit repository")
 		return
@@ -101,7 +107,7 @@ func DiffIndexVsHead() {
 		_ = json.Unmarshal(data, index)
 	}
 
-	headHash, _ := utils.GetHeadHash()
+	headHash, _ := storage.GetHeadHash()
 	headEntries := make(map[string]string)
 	if headHash != "" && headHash != "0000000000000000000000000000000000000000" {
 		obj, err := storage.LoadObject(headHash)

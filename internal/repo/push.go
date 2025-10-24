@@ -8,11 +8,11 @@ import (
 
 	"github.com/airbornharsh/hit/internal/apis"
 	"github.com/airbornharsh/hit/internal/go_types"
-	"github.com/airbornharsh/hit/utils"
+	"github.com/airbornharsh/hit/internal/storage"
 )
 
 func Push(remoteName, branchName string) error {
-	config, err := utils.GetConfig()
+	config, err := storage.GetConfig()
 	if err != nil {
 		return err
 	}
@@ -44,16 +44,23 @@ func Push(remoteName, branchName string) error {
 
 	apiCommits := []go_types.Commit{}
 
+	// if headExists {
+	// 	notEqual := false
+	// 	for i, commit := range commits {
+	// 		if commit.Hash == currentCommit {
+	// 			apiCommits = commits[i+1:]
+	// 			notEqual = true
+	// 			break
+	// 		}
+	// 	}
+	// 	if !notEqual {
+	// 		apiCommits = commits
+	// 	}
+	// } else {
+	// }
 	if headExists {
-		for i, commit := range commits {
-			if commit.Hash == currentCommit {
-				apiCommits = commits[i+1:]
-				break
-			}
-		}
-	} else {
-		apiCommits = commits
 	}
+	apiCommits = commits
 
 	err = apis.CreateCommit(remote, branchName, apiCommits)
 	if err != nil {
@@ -66,7 +73,13 @@ func Push(remoteName, branchName string) error {
 		return err
 	}
 	remoteBranchPath := filepath.Join(remoteBranchDirPath, branchName)
-	err = os.WriteFile(remoteBranchPath, []byte(currentCommit), 0644)
+	remoteHeadCommit := ""
+	if currentCommit != "" {
+		remoteHeadCommit = currentCommit
+	} else if len(apiCommits) > 0 {
+		remoteHeadCommit = apiCommits[len(apiCommits)-1].Hash
+	}
+	err = os.WriteFile(remoteBranchPath, []byte(remoteHeadCommit), 0644)
 	if err != nil {
 		return err
 	}

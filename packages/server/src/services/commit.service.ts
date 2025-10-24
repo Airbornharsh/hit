@@ -12,6 +12,7 @@ class CommitService {
     commits: {
       hash: string
       parent: string
+      otherParent: string
       author: string
       timestamp: string
       message: string
@@ -24,6 +25,7 @@ class CommitService {
           repoId,
           branchId,
           hash: commit.hash,
+          ...(commit.otherParent ? { otherParent: commit.otherParent } : {}),
           parent: commit.parent,
           author: commit.author,
           timestamp: commit.timestamp,
@@ -33,9 +35,7 @@ class CommitService {
           continue
         }
         headCommit = newCommit._id.toString()
-      } catch (e) {
-        console.error('Create commit error:', e)
-      }
+      } catch (e) {}
     }
 
     if (headCommit) {
@@ -125,6 +125,7 @@ class CommitService {
         branchName: branch.name,
         hash: commit.hash,
         parent: commit.parent,
+        otherParent: commit.otherParent,
         message: commit.message,
         timestamp: commit.timestamp,
         author: commit.author,
@@ -322,6 +323,7 @@ class CommitService {
         branchName: branch.name,
         hash: commit.hash,
         parent: commit.parent,
+        otherParent: commit.otherParent,
         message: commit.message,
         author: commit.author,
         timestamp: commit.timestamp,

@@ -22,11 +22,12 @@ type Tree struct {
 }
 
 type Commit struct {
-	Hash      string    `json:"hash"`
-	Parent    string    `json:"parent"`
-	Message   string    `json:"message"`
-	Author    string    `json:"author"`
-	Timestamp time.Time `json:"timestamp"`
+	Hash        string    `json:"hash"`
+	Parent      string    `json:"parent"`
+	OtherParent string    `json:"otherParent"`
+	Message     string    `json:"message"`
+	Author      string    `json:"author"`
+	Timestamp   time.Time `json:"timestamp"`
 }
 
 func TimeNow() time.Time {

@@ -253,6 +253,7 @@ class RepoController {
                   .map((commit) => ({
                     hash: commit.hash,
                     parent: commit.parent,
+                    otherParent: commit.otherParent,
                     message: commit.message,
                     author: commit.author,
                     timestamp: commit.timestamp.toISOString(),

@@ -63,7 +63,7 @@ func AddFile(filePath string) (string, error) {
 		return "", err
 	}
 
-	ignoreMatcher, err := GetIgnoreMatcher()
+	ignoreMatcher, err := storage.GetIgnoreMatcher()
 	if err == nil {
 		relPathSlash := filepath.ToSlash(relPath)
 		if ignoreMatcher.ShouldIgnore(relPathSlash, false) {
@@ -148,9 +148,16 @@ func AddAllFile(currentDir string) {
 func collectExistingFiles(rootDir string) map[string]bool {
 	existingFiles := make(map[string]bool)
 
-	ignoreMatcher, err := NewIgnoreMatcher(rootDir)
+	ignoreMatcher, err := storage.GetIgnoreMatcher()
 	if err != nil {
-		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+		repoRoot, err := storage.FindRepoRoot()
+		if err != nil {
+			return existingFiles
+		}
+		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
+		if err != nil {
+			return existingFiles
+		}
 	}
 
 	var collectFiles func(dir string)

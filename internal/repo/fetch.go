@@ -65,11 +65,12 @@ func fetchRemoteBranches(remoteName string, branches []struct {
 	Name       string `json:"name"`
 	HeadCommit string `json:"headCommit"`
 	Commits    []struct {
-		Hash      string `json:"hash"`
-		Parent    string `json:"parent"`
-		Message   string `json:"message"`
-		Author    string `json:"author"`
-		Timestamp string `json:"timestamp"`
+		Hash        string `json:"hash"`
+		Parent      string `json:"parent"`
+		OtherParent string `json:"otherParent"`
+		Message     string `json:"message"`
+		Author      string `json:"author"`
+		Timestamp   string `json:"timestamp"`
 	} `json:"commits"`
 }) error {
 	for _, branch := range branches {

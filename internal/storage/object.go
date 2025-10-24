@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/airbornharsh/hit/utils"
 )
 
 // WriteObject compresses and stores object in .hit/objects
@@ -38,7 +36,7 @@ func WriteObject(hash string, content []byte) error {
 }
 
 func LoadObject(hash string) (string, error) {
-	_, _, filePath, err := utils.HashInfo(hash)
+	_, _, filePath, err := HashInfo(hash)
 	if err != nil {
 		return "", err
 	}

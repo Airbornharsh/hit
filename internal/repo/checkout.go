@@ -10,7 +10,6 @@ import (
 
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
-	"github.com/airbornharsh/hit/utils"
 )
 
 func CreateBranch(branch string) error {
@@ -18,12 +17,12 @@ func CreateBranch(branch string) error {
 		return fmt.Errorf("branch '%s' already exists", branch)
 	}
 
-	currentBranch, err := utils.GetBranch()
+	currentBranch, err := storage.GetBranch()
 	if err != nil {
 		return fmt.Errorf("failed to get current branch: %v", err)
 	}
 
-	currentCommitHash, err := utils.GetCurrentCommit(currentBranch)
+	currentCommitHash, err := storage.GetCurrentCommit(currentBranch)
 	if err != nil {
 		return fmt.Errorf("failed to get current commit: %v", err)
 	}
@@ -63,7 +62,7 @@ func SwitchBranch(branch string) error {
 		return fmt.Errorf("branch '%s' does not exist", branch)
 	}
 
-	_, err := utils.GetBranch()
+	_, err := storage.GetBranch()
 	if err != nil {
 		return err
 	}
@@ -84,7 +83,7 @@ func SwitchBranch(branch string) error {
 		return fmt.Errorf("failed to update HEAD: %v", err)
 	}
 
-	commitHash, err := utils.GetCurrentCommit(branch)
+	commitHash, err := storage.GetCurrentCommit(branch)
 	if err != nil {
 		return fmt.Errorf("failed to get commit hash for branch '%s': %v", branch, err)
 	}
@@ -104,9 +103,9 @@ func SwitchBranch(branch string) error {
 		return fmt.Errorf("failed to parse tree object: %v", err)
 	}
 
-	err = updateWorkingDirectory(tree)
+	err = storage.UpdateWorkingDirectoryAndIndexFromCommit(commitHash)
 	if err != nil {
-		return fmt.Errorf("failed to update working directory: %v", err)
+		return fmt.Errorf("failed to update working directory and index: %v", err)
 	}
 
 	err = updateIndex(tree)
@@ -159,9 +158,13 @@ func hasUncommittedChanges() (bool, error) {
 func getAllWorkingFiles() (map[string]string, error) {
 	workingFiles := make(map[string]string)
 
-	ignoreMatcher, err := GetIgnoreMatcher()
+	ignoreMatcher, err := storage.GetIgnoreMatcher()
 	if err != nil {
-		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+		repoRoot, err := storage.FindRepoRoot()
+		if err != nil {
+			return nil, err
+		}
+		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
 	}
 
 	err = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
@@ -209,47 +212,16 @@ func getAllWorkingFiles() (map[string]string, error) {
 	return workingFiles, nil
 }
 
-func updateWorkingDirectory(tree go_types.Tree) error {
-	indexPath := filepath.Join(".hit", "index.json")
-	index := &go_types.Index{Entries: make(map[string]string)}
-
-	if data, err := os.ReadFile(indexPath); err == nil {
-		json.Unmarshal(data, index)
-	}
-
-	ignoreMatcher, err := GetIgnoreMatcher()
-	if err != nil {
-		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
-	}
-
-	for filePath := range index.Entries {
-		if _, exists := tree.Entries[filePath]; !exists {
-			if !ignoreMatcher.ShouldIgnore(filePath, false) {
-				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-					return fmt.Errorf("failed to remove file %s: %v", filePath, err)
-				}
-			}
-		}
-	}
-
-	for filePath, objectHash := range tree.Entries {
-		if !ignoreMatcher.ShouldIgnore(filePath, false) {
-			err := restoreFileFromObject(filePath, objectHash)
-			if err != nil {
-				return fmt.Errorf("failed to restore file %s: %v", filePath, err)
-			}
-		}
-	}
-
-	return nil
-}
-
 func updateIndex(tree go_types.Tree) error {
 	indexPath := filepath.Join(".hit", "index.json")
 
-	ignoreMatcher, err := GetIgnoreMatcher()
+	ignoreMatcher, err := storage.GetIgnoreMatcher()
 	if err != nil {
-		ignoreMatcher = &IgnoreMatcher{rules: []IgnoreRule{}}
+		repoRoot, err := storage.FindRepoRoot()
+		if err != nil {
+			return err
+		}
+		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
 	}
 
 	index := &go_types.Index{
@@ -276,25 +248,6 @@ func updateIndex(tree go_types.Tree) error {
 	return nil
 }
 
-func restoreFileFromObject(filePath, objectHash string) error {
-	objectData, err := storage.LoadObject(objectHash)
-	if err != nil {
-		return fmt.Errorf("failed to load object %s: %v", objectHash, err)
-	}
-
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", dir, err)
-	}
-
-	err = os.WriteFile(filePath, []byte(objectData), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write file %s: %v", filePath, err)
-	}
-
-	return nil
-}
-
 func ListBranches() error {
 	refsDir := filepath.Join(".hit", "refs", "heads")
 
@@ -313,7 +266,7 @@ func ListBranches() error {
 		return nil
 	}
 
-	currentBranch, err := utils.GetBranch()
+	currentBranch, err := storage.GetBranch()
 	if err != nil {
 		currentBranch = ""
 	}
@@ -339,7 +292,7 @@ func DeleteBranch(branch string, force bool) error {
 		return fmt.Errorf("branch '%s' does not exist", branch)
 	}
 
-	currentBranch, err := utils.GetBranch()
+	currentBranch, err := storage.GetBranch()
 	if err != nil {
 		return fmt.Errorf("failed to get current branch: %v", err)
 	}
@@ -374,17 +327,17 @@ func DeleteBranch(branch string, force bool) error {
 }
 
 func hasUnmergedChanges(branch string) (bool, error) {
-	branchCommit, err := utils.GetCurrentCommit(branch)
+	branchCommit, err := storage.GetCurrentCommit(branch)
 	if err != nil {
 		return false, err
 	}
 
-	currentBranch, err := utils.GetBranch()
+	currentBranch, err := storage.GetBranch()
 	if err != nil {
 		return false, err
 	}
 
-	currentCommit, err := utils.GetCurrentCommit(currentBranch)
+	currentCommit, err := storage.GetCurrentCommit(currentBranch)
 	if err != nil {
 		return false, err
 	}

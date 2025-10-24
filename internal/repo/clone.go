@@ -186,7 +186,7 @@ func restoreFilesFromEntries(entries map[string]string) error {
 			defer wg.Done()
 
 			for _, file := range chunk {
-				err := restoreFileFromObject(file.path, file.hash)
+				err := storage.RestoreFileFromObject(file.path, file.hash)
 				if err != nil {
 					errChan <- fmt.Errorf("file worker %d failed to restore file %s: %v", workerID, file.path, err)
 					return

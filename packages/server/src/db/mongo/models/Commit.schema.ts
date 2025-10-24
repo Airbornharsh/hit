@@ -7,6 +7,7 @@ export interface ICommit extends mongoose.Document {
   branchId: mongoose.Schema.Types.ObjectId | IBranch
   hash: string
   parent: string
+  otherParent: string
   message: string
   author: string
   timestamp: Date
@@ -28,6 +29,7 @@ const CommitSchema = new mongoose.Schema(
     },
     hash: { type: String, required: true },
     parent: { type: String, required: true },
+    otherParent: { type: String, required: false, default: null },
     message: { type: String, required: true },
     author: { type: String, required: true },
     timestamp: { type: Date, required: true },

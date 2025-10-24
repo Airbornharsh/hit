@@ -113,6 +113,7 @@ class BranchController {
       const commits = (req.body.commits || []) as {
         hash: string
         parent: string
+        otherParent: string
         author: string
         timestamp: string
         message: string

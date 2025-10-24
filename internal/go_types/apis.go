@@ -6,12 +6,13 @@ type HeadCommitApiBody struct {
 	Data    struct {
 		Exists     bool `json:"exists"`
 		HeadCommit struct {
-			ID        string `json:"_id"`
-			Message   string `json:"message"`
-			Author    string `json:"author"`
-			Timestamp string `json:"timestamp"`
-			Hash      string `json:"hash"`
-			Parent    string `json:"parent"`
+			ID          string `json:"_id"`
+			Message     string `json:"message"`
+			Author      string `json:"author"`
+			Timestamp   string `json:"timestamp"`
+			Hash        string `json:"hash"`
+			Parent      string `json:"parent"`
+			OtherParent string `json:"otherParent"`
 		} `json:"headCommit"`
 	} `json:"data"`
 }
@@ -56,11 +57,12 @@ type CloneRepositoryApiBody struct {
 			Name       string `json:"name"`
 			HeadCommit string `json:"headCommit"`
 			Commits    []struct {
-				Hash      string `json:"hash"`
-				Parent    string `json:"parent"`
-				Message   string `json:"message"`
-				Author    string `json:"author"`
-				Timestamp string `json:"timestamp"`
+				Hash        string `json:"hash"`
+				Parent      string `json:"parent"`
+				OtherParent string `json:"otherParent"`
+				Message     string `json:"message"`
+				Author      string `json:"author"`
+				Timestamp   string `json:"timestamp"`
 			} `json:"commits"`
 		} `json:"branches"`
 		Config     map[string]any `json:"config"`

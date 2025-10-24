@@ -10,7 +10,6 @@ import (
 
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
-	"github.com/airbornharsh/hit/utils"
 )
 
 var ErrNoStagedChanges = errors.New("no staged changes to commit")
@@ -22,7 +21,7 @@ func RandomHash() string {
 }
 
 func BuildTreeFromStage() (string, error) {
-	repoRoot, err := utils.FindRepoRoot()
+	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +50,7 @@ func BuildTreeFromStage() (string, error) {
 		rootTree.Entries[normalizedPath] = hash
 	}
 
-	parentHash, _ := utils.GetHeadHash()
+	parentHash, _ := storage.GetHeadHash()
 	rootTree.Parent = parentHash
 
 	println("Parent Commit", parentHash)
