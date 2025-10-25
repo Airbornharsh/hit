@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
@@ -76,7 +75,7 @@ func InitializeIndex() {
 	}
 
 	// Collect all files in the repository
-	existingFiles := collectAllFiles(repoRoot)
+	existingFiles := storage.CollectAllFiles(repoRoot)
 
 	// Process each file
 	for filePath := range existingFiles {
@@ -122,55 +121,4 @@ func InitializeIndex() {
 	}
 
 	fmt.Printf("Initialized index with %d files\n", len(index.Entries))
-}
-
-func collectAllFiles(rootDir string) map[string]bool {
-	existingFiles := make(map[string]bool)
-
-	ignoreMatcher, err := storage.GetIgnoreMatcher()
-	if err != nil {
-		repoRoot, err := storage.FindRepoRoot()
-		if err != nil {
-			return existingFiles
-		}
-		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
-		if err != nil {
-			return existingFiles
-		}
-	}
-
-	var collectFiles func(dir string)
-	collectFiles = func(dir string) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return
-		}
-
-		for _, entry := range entries {
-			path := filepath.Join(dir, entry.Name())
-
-			if strings.HasSuffix(path, ".hit") {
-				continue
-			}
-
-			relPath, err := filepath.Rel(rootDir, path)
-			if err != nil {
-				continue
-			}
-			relPath = filepath.ToSlash(relPath)
-
-			if ignoreMatcher.ShouldIgnore(relPath, entry.IsDir()) {
-				continue
-			}
-
-			if entry.IsDir() {
-				collectFiles(path)
-			} else {
-				existingFiles[path] = true
-			}
-		}
-	}
-
-	collectFiles(rootDir)
-	return existingFiles
 }

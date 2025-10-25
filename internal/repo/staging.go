@@ -11,28 +11,8 @@ import (
 	"github.com/airbornharsh/hit/internal/storage"
 )
 
-func getRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		hitDir := filepath.Join(dir, ".hit")
-		if _, err := os.Stat(hitDir); err == nil {
-			return dir, nil
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("not in a git repository")
-		}
-		dir = parent
-	}
-}
-
 func getRelativePath(absPath string) (string, error) {
-	repoRoot, err := getRepoRoot()
+	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +97,7 @@ func AddAllFile(currentDir string) {
 		pwd = currentDir
 	}
 
-	repoRoot, err := getRepoRoot()
+	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {
 		return
 	}
@@ -128,7 +108,7 @@ func AddAllFile(currentDir string) {
 		json.Unmarshal(data, index)
 	}
 
-	existingFiles := collectExistingFiles(pwd)
+	existingFiles := storage.CollectAllFiles(pwd)
 
 	for filePath := range existingFiles {
 		absPath := filepath.Join(repoRoot, filePath)
@@ -143,57 +123,6 @@ func AddAllFile(currentDir string) {
 			}
 		}
 	}
-}
-
-func collectExistingFiles(rootDir string) map[string]bool {
-	existingFiles := make(map[string]bool)
-
-	ignoreMatcher, err := storage.GetIgnoreMatcher()
-	if err != nil {
-		repoRoot, err := storage.FindRepoRoot()
-		if err != nil {
-			return existingFiles
-		}
-		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
-		if err != nil {
-			return existingFiles
-		}
-	}
-
-	var collectFiles func(dir string)
-	collectFiles = func(dir string) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return
-		}
-
-		for _, entry := range entries {
-			absPath := filepath.Join(dir, entry.Name())
-
-			if strings.HasSuffix(absPath, ".hit") {
-				continue
-			}
-
-			relPath, err := getRelativePath(absPath)
-			if err != nil {
-				continue
-			}
-			relPath = filepath.ToSlash(relPath)
-
-			if ignoreMatcher.ShouldIgnore(relPath, entry.IsDir()) {
-				continue
-			}
-
-			if entry.IsDir() {
-				collectFiles(absPath)
-			} else {
-				existingFiles[relPath] = true
-			}
-		}
-	}
-
-	collectFiles(rootDir)
-	return existingFiles
 }
 
 func ResetFile(filePath string) (string, error) {

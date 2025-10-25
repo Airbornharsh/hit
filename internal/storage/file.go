@@ -2,6 +2,8 @@ package storage
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -135,4 +137,55 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func CollectAllFiles(rootDir string) map[string]bool {
+	existingFiles := make(map[string]bool)
+
+	ignoreMatcher, err := GetIgnoreMatcher()
+	if err != nil {
+		repoRoot, err := FindRepoRoot()
+		if err != nil {
+			return existingFiles
+		}
+		ignoreMatcher, err = NewIgnoreMatcher(repoRoot)
+		if err != nil {
+			return existingFiles
+		}
+	}
+
+	var collectFiles func(dir string)
+	collectFiles = func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+
+			if strings.HasSuffix(path, ".hit") {
+				continue
+			}
+
+			relPath, err := filepath.Rel(rootDir, path)
+			if err != nil {
+				continue
+			}
+			relPath = filepath.ToSlash(relPath)
+
+			if ignoreMatcher.ShouldIgnore(relPath, entry.IsDir()) {
+				continue
+			}
+
+			if entry.IsDir() {
+				collectFiles(path)
+			} else {
+				existingFiles[path] = true
+			}
+		}
+	}
+
+	collectFiles(rootDir)
+	return existingFiles
 }
