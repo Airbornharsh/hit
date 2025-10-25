@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/airbornharsh/hit/internal/go_types"
@@ -13,6 +14,28 @@ import (
 )
 
 func CreateCommit(message string) (string, error) {
+	// Check for unresolved merge conflicts
+	conflictResolution, err := repo.LoadConflictResolution()
+	if conflictResolution != nil {
+		if err == nil && conflictResolution.HasUnresolvedConflicts() {
+			unresolved := conflictResolution.GetUnresolvedConflicts()
+			fmt.Println("unresolved", unresolved)
+			var filePaths []string
+			for _, conflict := range unresolved {
+				filePaths = append(filePaths, conflict.FilePath)
+			}
+			return "", fmt.Errorf("cannot commit: unresolved merge conflicts in files: %v", filePaths)
+		}
+
+		if conflictResolution.Message != "" {
+			message = conflictResolution.Message
+		}
+	}
+
+	if message == "" {
+		return "", fmt.Errorf("cannot commit: no message provided")
+	}
+
 	stagedTreeHash, err := repo.BuildTreeFromStage()
 	if err != nil {
 		return "", err
@@ -23,22 +46,34 @@ func CreateCommit(message string) (string, error) {
 		return "", err
 	}
 
-	parentFilePath := filepath.Join(".hit", "refs", "heads", currentBranch)
+	// Check if we're in a merge state and use parent/otherParent from conflicts.json
+	var parent, otherParent string
+	if repo.IsInMergeState() {
+		parent, otherParent, err = repo.GetMergeParents()
+		if err != nil {
+			return "", fmt.Errorf("failed to get merge parents: %v", err)
+		}
+	} else {
+		// Normal commit - get parent from current branch
+		parentFilePath := filepath.Join(".hit", "refs", "heads", currentBranch)
+		parentFile, _ := os.ReadFile(parentFilePath)
+		parent = strings.TrimSpace(string(parentFile))
+		otherParent = "" // No other parent for normal commits
+	}
+
 	parentLogFilePath := filepath.Join(".hit", "logs", "refs", "heads", currentBranch)
 
-	parentFile, _ := os.ReadFile(parentFilePath)
-	parentLogFile, _ := os.ReadFile(parentLogFilePath)
-
 	commit := go_types.Commit{
-		Hash:      stagedTreeHash,
-		Parent:    string(parentFile),
-		Message:   message,
-		Author:    os.Getenv("USER"),
-		Timestamp: time.Now(),
+		Hash:        stagedTreeHash,
+		Parent:      parent,
+		OtherParent: otherParent,
+		Message:     message,
+		Author:      os.Getenv("USER"),
+		Timestamp:   time.Now(),
 	}
 
 	var commits []go_types.Commit
-
+	parentLogFile, _ := os.ReadFile(parentLogFilePath)
 	json.Unmarshal(parentLogFile, &commits)
 
 	commits = append(commits, commit)
@@ -53,6 +88,13 @@ func CreateCommit(message string) (string, error) {
 	err = os.WriteFile(filepath.Join(".hit", "refs", "heads", currentBranch), []byte(stagedTreeHash), 0644)
 	if err != nil {
 		return "", err
+	}
+
+	// Clear conflict resolution if this was a merge commit
+	if repo.IsInMergeState() {
+		if err := repo.ClearConflictResolution(); err != nil {
+			fmt.Printf("Warning: failed to clear conflict resolution: %v\n", err)
+		}
 	}
 
 	return stagedTreeHash, nil

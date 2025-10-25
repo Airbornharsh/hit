@@ -190,7 +190,7 @@ func GetCommitTree(commitHash string) (*go_types.Tree, error) {
 	return &tree, nil
 }
 
-func GetCommitObject(commitHash string) (*go_types.Commit, error) {
+func GetCommitObject(branchName, commitHash string) (*go_types.Commit, error) {
 	if commitHash == "0000000000000000000000000000000000000000" {
 		return &go_types.Commit{
 			Hash:   commitHash,
@@ -198,15 +198,61 @@ func GetCommitObject(commitHash string) (*go_types.Commit, error) {
 		}, nil
 	}
 
+	var commits []go_types.Commit
+	logPath := filepath.Join(".hit", "logs", "refs", "heads", branchName)
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, &commits)
+	if err != nil {
+		return nil, err
+	}
+
 	commitData, err := LoadObject(commitHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load commit object: %v", err)
+		return nil, err
 	}
 
 	var commit go_types.Commit
 	err = json.Unmarshal([]byte(commitData), &commit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse commit object: %v", err)
+		return nil, err
+	}
+
+	return &commit, nil
+}
+
+func GetRemoteCommitObject(remoteName, branchName, commitHash string) (*go_types.Commit, error) {
+	if commitHash == "0000000000000000000000000000000000000000" {
+		return &go_types.Commit{
+			Hash:   commitHash,
+			Parent: "",
+		}, nil
+	}
+
+	var commits []go_types.Commit
+	logPath := filepath.Join(".hit", "logs", "refs", "remotes", remoteName, branchName)
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, &commits)
+	if err != nil {
+		return nil, err
+	}
+
+	commitData, err := LoadObject(commitHash)
+	if err != nil {
+		return nil, err
+	}
+
+	var commit go_types.Commit
+	err = json.Unmarshal([]byte(commitData), &commit)
+	if err != nil {
+		return nil, err
 	}
 
 	return &commit, nil
@@ -290,4 +336,25 @@ func RestoreFileFromObject(filePath, objectHash string) error {
 	}
 
 	return nil
+}
+
+func GetFileContentFromHash(hash string) (string, error) {
+	if hash == "" {
+		return "", nil
+	}
+
+	content, err := LoadObject(hash)
+	if err != nil {
+		return "", err
+	}
+
+	return content, nil
+}
+
+func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
+	return json.MarshalIndent(v, prefix, indent)
+}
+
+func Unmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
 }

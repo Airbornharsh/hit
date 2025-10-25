@@ -14,11 +14,6 @@ var commitCmd = &cobra.Command{
 	Use:   "commit",
 	Short: "Record changes to the repository",
 	Run: func(cmd *cobra.Command, args []string) {
-		if message == "" {
-			println("Please provide a commit message using -m")
-			return
-		}
-
 		hash, err := commit.CreateCommit(message)
 		if err != nil {
 			println("Error creating commit:", err)
