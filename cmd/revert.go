@@ -4,41 +4,54 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/airbornharsh/hit/internal/repo"
 	"github.com/spf13/cobra"
 )
 
-var resetCmd = &cobra.Command{
-	Use:   "reset [file]",
-	Short: "Reset file(s) from staging area",
+var revertCmd = &cobra.Command{
+	Use:   "revert [file]",
+	Short: "Revert file(s) to last commit state",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, file := range args {
-			info, _ := os.Stat(file)
 			pwd, err := os.Getwd()
 			if err != nil {
 				continue
 			}
 			filePath := filepath.Join(pwd, file)
-			if file == "." || info.IsDir() {
-				repo.ResetAllFile(filePath)
+
+			if file == "." {
+				repo.RevertAllFile(filePath)
 			} else {
-				if _, err := os.Stat(file); os.IsNotExist(err) {
-					fmt.Printf("File does not exist: %s\n", file)
-					continue
+				if info, err := os.Stat(file); err == nil && info.IsDir() {
+					repo.RevertAllFile(filePath)
+				} else {
+					if repo.CheckFileForConflicts(file) {
+						fmt.Printf("Cannot revert file %s: has unresolved merge conflicts\n", file)
+						continue
+					}
+
+					_, err := repo.RevertFile(filePath)
+					if err != nil {
+						if !strings.Contains(err.Error(), "file does not exist") {
+							fmt.Printf("Error reverting file %s: %v\n", file, err)
+						}
+						continue
+					}
+
+					conflictResolution, err := repo.LoadConflictResolution()
+					if err == nil && conflictResolution != nil {
+						conflictResolution.MarkResolved(file)
+						conflictResolution.SaveConflictResolution()
+					}
 				}
-				hash, err := repo.ResetFile(filePath)
-				if err != nil {
-					fmt.Printf("Error resetting file %s: %v\n", file, err)
-					continue
-				}
-				fmt.Printf("Reseted %s as %s\n", file, hash)
 			}
 		}
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(resetCmd)
+	rootCmd.AddCommand(revertCmd)
 }

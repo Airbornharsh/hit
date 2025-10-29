@@ -139,7 +139,7 @@ func min(a, b int) int {
 	return b
 }
 
-func CollectAllFiles(rootDir string) map[string]bool {
+func CollectAllFiles(rootDir string, repoRoot string) map[string]bool {
 	existingFiles := make(map[string]bool)
 
 	ignoreMatcher, err := GetIgnoreMatcher()
@@ -181,7 +181,9 @@ func CollectAllFiles(rootDir string) map[string]bool {
 			if entry.IsDir() {
 				collectFiles(path)
 			} else {
-				existingFiles[path] = true
+				newPath := strings.Replace(path, repoRoot, "", 1)
+				newPath = strings.TrimPrefix(newPath, "/")
+				existingFiles[newPath] = true
 			}
 		}
 	}

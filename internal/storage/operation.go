@@ -69,6 +69,26 @@ func GetHeadHash() (string, error) {
 	return string(file), nil
 }
 
+func GetHeadTree() (*go_types.Tree, error) {
+	commitHash, err := GetHeadHash()
+	if err != nil {
+		return nil, err
+	}
+
+	commitEntriesData, err := LoadObject(commitHash)
+	if err != nil {
+		return nil, err
+	}
+
+	var tree go_types.Tree
+	err = json.Unmarshal([]byte(commitEntriesData), &tree)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tree, nil
+}
+
 func GetBranch() (string, error) {
 	location, err := GetHead()
 	if err != nil {

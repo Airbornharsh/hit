@@ -34,7 +34,7 @@ func AddFile(filePath string) (string, error) {
 
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		relPath, _ := getRelativePath(absPath)
-		removeFromIndex(relPath)
+		removeFromIndex(relPath, nil)
 		return "", fmt.Errorf("file does not exist: %s", filePath)
 	}
 
@@ -108,7 +108,7 @@ func AddAllFile(currentDir string) {
 		json.Unmarshal(data, index)
 	}
 
-	existingFiles := storage.CollectAllFiles(pwd)
+	existingFiles := storage.CollectAllFiles(pwd, repoRoot)
 
 	for filePath := range existingFiles {
 		absPath := filepath.Join(repoRoot, filePath)
@@ -119,7 +119,7 @@ func AddAllFile(currentDir string) {
 		if !existingFiles[filePath] {
 			absFilePath := filepath.Join(repoRoot, filePath)
 			if strings.HasPrefix(absFilePath, pwd) {
-				removeFromIndex(filePath)
+				removeFromIndex(filePath, index)
 			}
 		}
 	}
@@ -149,7 +149,19 @@ func ResetFile(filePath string) (string, error) {
 		return "", fmt.Errorf("file not staged: %s", relPath)
 	}
 
-	delete(index.Entries, relPath)
+	if relPath != "" {
+		tree, err := storage.GetHeadTree()
+		if err != nil {
+			return "", err
+		}
+		tempHash := tree.Entries[relPath]
+		if tempHash == "" {
+			delete(index.Entries, relPath)
+		} else {
+			index.Entries[relPath] = tempHash
+		}
+	}
+
 	index.Changed = true
 
 	newData, _ := json.MarshalIndent(index, "", "  ")
@@ -191,7 +203,7 @@ func ResetAllFile(currentDir string) {
 	}
 }
 
-func removeFromIndex(filePath string) {
+func removeFromIndex(filePath string, indexData *go_types.Index) {
 	var relPath string
 	if filepath.IsAbs(filePath) {
 		var err error
@@ -203,11 +215,14 @@ func removeFromIndex(filePath string) {
 		relPath = filePath
 	}
 
-	indexFile := filepath.Join(".hit", "index.json")
 	index := &go_types.Index{Entries: make(map[string]string)}
-
-	if data, err := os.ReadFile(indexFile); err == nil {
-		json.Unmarshal(data, index)
+	indexFile := filepath.Join(".hit", "index.json")
+	if indexData == nil {
+		if data, err := os.ReadFile(indexFile); err == nil {
+			json.Unmarshal(data, index)
+		}
+	} else {
+		index = indexData
 	}
 
 	if _, exists := index.Entries[relPath]; exists {
@@ -217,5 +232,125 @@ func removeFromIndex(filePath string) {
 		newData, _ := json.MarshalIndent(index, "", "  ")
 		os.WriteFile(indexFile, newData, 0644)
 		fmt.Printf("Removed from index: %s\n", relPath)
+	}
+}
+
+func RevertFile(filePath string) (string, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	relPath, err := getRelativePath(absPath)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		removeFromIndex(relPath, nil)
+		return "", fmt.Errorf("file does not exist: %s", filePath)
+	}
+
+	indexFile := filepath.Join(".hit", "index.json")
+	index := &go_types.Index{Entries: make(map[string]string)}
+
+	if data, err := os.ReadFile(indexFile); err == nil {
+		json.Unmarshal(data, index)
+	}
+
+	tree, err := storage.GetHeadTree()
+	if err != nil {
+		return "", err
+	}
+
+	var targetHash string
+	var source string
+
+	if indexHash, exists := index.Entries[relPath]; exists {
+		headHash, headExists := tree.Entries[relPath]
+		if headExists && indexHash != headHash {
+			targetHash = indexHash
+			source = "staged changes"
+		} else if headExists {
+			targetHash = headHash
+			source = "last commit"
+		} else {
+			removeFromIndex(relPath, nil)
+			os.Remove(absPath)
+			return "", fmt.Errorf("file not in last commit: %s", relPath)
+		}
+	} else {
+		headHash, headExists := tree.Entries[relPath]
+		if !headExists {
+			removeFromIndex(relPath, nil)
+			os.Remove(absPath)
+			return "", fmt.Errorf("file not in last commit: %s", relPath)
+		}
+		targetHash = headHash
+		source = "last commit"
+	}
+
+	content, err := storage.LoadObject(targetHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file from %s: %v", source, err)
+	}
+
+	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	index.Entries[relPath] = targetHash
+	index.Changed = true
+
+	newData, _ := json.MarshalIndent(index, "", "  ")
+	if err := os.WriteFile(indexFile, newData, 0644); err != nil {
+		return "", err
+	}
+
+	fmt.Printf("Reverted %s from %s\n", relPath, source)
+	return targetHash, nil
+}
+
+func RevertAllFile(currentDir string) {
+	var pwd = "/"
+	if currentDir == "." {
+		var pwdError error
+		pwd, pwdError = os.Getwd()
+		if pwdError != nil {
+			return
+		}
+	} else {
+		pwd = currentDir
+	}
+
+	repoRoot, err := storage.FindRepoRoot()
+	if err != nil {
+		return
+	}
+
+	existingFiles := storage.CollectAllFiles(pwd, repoRoot)
+	for filePath := range existingFiles {
+		absPath := filepath.Join(repoRoot, filePath)
+		RevertFile(absPath)
+	}
+
+	indexFile := filepath.Join(".hit", "index.json")
+	index := &go_types.Index{Entries: make(map[string]string)}
+	if data, err := os.ReadFile(indexFile); err == nil {
+		json.Unmarshal(data, index)
+	}
+
+	relPwd, err := filepath.Rel(repoRoot, pwd)
+	if err != nil {
+		relPwd = pwd
+	}
+
+	for filePath := range index.Entries {
+		if strings.HasPrefix(filePath, relPwd+"/") || (relPwd == "." && !strings.Contains(filePath, "/")) {
+			absFilePath := filepath.Join(repoRoot, filePath)
+			if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
+				removeFromIndex(filePath, nil)
+			}
+		}
 	}
 }

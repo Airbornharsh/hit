@@ -75,7 +75,7 @@ func InitializeIndex() {
 	}
 
 	// Collect all files in the repository
-	existingFiles := storage.CollectAllFiles(repoRoot)
+	existingFiles := storage.CollectAllFiles(repoRoot, repoRoot)
 
 	// Process each file
 	for filePath := range existingFiles {
