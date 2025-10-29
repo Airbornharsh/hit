@@ -309,6 +309,46 @@ func HandleDiffContentCommand(commandParts []string) go_types.Output {
 	return go_types.Output{Success: true, Data: data, Message: "diff content"}
 }
 
+// HandleBranchesCommand returns the list of local branches and the current branch
+func HandleBranchesCommand() go_types.Output {
+	repoRoot, err := storage.FindRepoRoot()
+	if err != nil {
+		return go_types.Output{Success: false, Message: fmt.Sprintf("failed to find repo root: %v", err)}
+	}
+
+	current, err := storage.GetBranch()
+	if err != nil {
+		return go_types.Output{Success: false, Message: fmt.Sprintf("failed to get current branch: %v", err)}
+	}
+
+	headsDir := filepath.Join(repoRoot, ".hit", "refs", "heads")
+	branches := make([]string, 0)
+
+	// Walk headsDir recursively to support nested branch names (e.g., feature/x)
+	_ = filepath.WalkDir(headsDir, func(p string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(headsDir, p)
+		if err != nil {
+			return nil
+		}
+		// Normalize to forward slashes
+		branches = append(branches, filepath.ToSlash(rel))
+		return nil
+	})
+
+	data := map[string]any{
+		"branches": branches,
+		"current":  current,
+	}
+
+	return go_types.Output{Success: true, Data: data, Message: "branches listed"}
+}
+
 func getHeadContent(relPath string) (string, bool, error) {
 	tree, err := storage.GetHeadTree()
 	if err != nil {

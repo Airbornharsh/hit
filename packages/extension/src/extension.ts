@@ -104,6 +104,10 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('hit.refresh', async () => {
       await hitSourceControlProvider.refresh()
     }),
+
+    vscode.commands.registerCommand('hit.switchBranch', async () => {
+      await (hitSourceControlProvider as any).openSwitchBranchQuickPick()
+    }),
   ]
 
   context.subscriptions.push(...disposables)

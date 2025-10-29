@@ -69,6 +69,8 @@ var repoExtensionCmd = &cobra.Command{
 		switch command {
 		case "status":
 			output = extension.HandleStatusCommand()
+		case "branches":
+			output = extension.HandleBranchesCommand()
 		case "commit-tree":
 			output = extension.HandleCommitTreeCommand(commandParts[1:])
 		case "diff-content":

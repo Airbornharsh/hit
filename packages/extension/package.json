@@ -66,13 +66,19 @@
         "title": "Open Diff",
         "category": "Hit",
         "icon": "$(diff)"
+      },
+      {
+        "command": "hit.switchBranch",
+        "title": "Switch Branch",
+        "category": "Hit",
+        "icon": "$(git-branch)"
       }
     ],
     "views": {
       "hit-sidebar": [
         {
           "id": "hitSourceControl",
-          "name": "Source Control",
+          "name": "Hit Source Control",
           "when": "true"
         }
       ]
@@ -88,6 +94,11 @@
           "command": "hit.refresh",
           "when": "view == hitSourceControl",
           "group": "navigation"
+        },
+        {
+          "command": "hit.switchBranch",
+          "when": "view == hitSourceControl",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

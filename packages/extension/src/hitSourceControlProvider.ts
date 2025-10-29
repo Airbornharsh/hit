@@ -948,6 +948,119 @@ export class HitSourceControlProvider
     }
   }
 
+  // Branch switching: list branches via cmdRun and checkout via cmdRunExec
+  async openSwitchBranchQuickPick(): Promise<void> {
+    const repo = this.getRepository()
+    if (!repo) {
+      vscode.window.showWarningMessage('No repository detected')
+      return
+    }
+
+    try {
+      const res = await cmdRun<CommandInput, CommandOutput>({
+        command: 'branches',
+        workspaceDir: repo.path,
+      })
+      if (!res.success) {
+        vscode.window.showErrorMessage(res.message || 'Failed to list branches')
+        return
+      }
+      const data = (res.data || {}) as { branches?: string[]; current?: string }
+      const branches = data.branches || []
+      const current = data.current || repo.branch
+
+      if (branches.length === 0) {
+        vscode.window.showInformationMessage('No branches found')
+        return
+      }
+
+      const items: Array<
+        vscode.QuickPickItem & { __type?: 'branch' | 'create' }
+      > = [
+        ...branches.map((b) => ({
+          label: b,
+          description: b === current ? 'current' : undefined,
+          __type: 'branch' as const,
+        })),
+        {
+          label: '$(add) Create new branch…',
+          alwaysShow: true,
+          __type: 'create' as const,
+        },
+      ]
+
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: `Current: ${current}. Choose a branch to checkout`,
+        matchOnDescription: true,
+      })
+      if (!picked) return
+
+      if ((picked as any).__type === 'create') {
+        const newName = await vscode.window.showInputBox({
+          prompt: 'Create new branch',
+          placeHolder: 'new-branch-name',
+          validateInput: (val) => {
+            const t = val.trim()
+            if (!t) return 'Branch name cannot be empty'
+            if (branches.includes(t)) return 'Branch already exists'
+            return undefined
+          },
+        })
+        if (!newName) return
+
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Creating and switching to ${newName}...`,
+          },
+          async () => {
+            try {
+              await cmdRunExec(`hit checkout -b \"${newName}\"`, repo.path)
+              await this.refresh()
+              vscode.window.showInformationMessage(
+                `Created and switched to branch ${newName}`,
+              )
+            } catch (err: any) {
+              const msg = err?.message || String(err) || 'Unknown error'
+              vscode.window.showErrorMessage(
+                `Unable to create branch ${newName}: ${msg}`,
+              )
+            }
+          },
+        )
+        return
+      }
+
+      if (picked.label === current) return
+
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Checking out ${picked.label}...`,
+        },
+        async () => {
+          try {
+            await cmdRunExec(`hit checkout \"${picked.label}\"`, repo.path)
+            await this.refresh()
+            vscode.window.showInformationMessage(
+              `Switched to branch ${picked.label}`,
+            )
+          } catch (err: any) {
+            const msg = err?.message || String(err) || 'Unknown error'
+            vscode.window.showErrorMessage(
+              `Unable to switch branch to ${picked.label}: ${msg}`,
+            )
+          }
+        },
+      )
+    } catch (error: any) {
+      Log.error('Switch branch failed:', error)
+      vscode.window.showErrorMessage(
+        `Failed to switch branch: ${error?.message || String(error)}`,
+      )
+    }
+  }
+
   // Additional Git operations (placeholder implementations)
   publish(): void {
     vscode.window.showInformationMessage('Published branch')

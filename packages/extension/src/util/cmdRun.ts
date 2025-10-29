@@ -112,12 +112,23 @@ export async function cmdRunExec(
     throw error
   }
   try {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        Log.error('Error executing command:', error)
-        throw error
-      }
-      // Log.log("Command output:", stdout);
+    await new Promise<void>((resolve, reject) => {
+      const child = exec(command, (error, stdout, stderr) => {
+        if (error) {
+          const message =
+            stderr && String(stderr).trim().length > 0
+              ? String(stderr)
+              : error.message
+          Log.error('Error executing command:', message)
+          reject(new Error(message))
+          return
+        }
+        resolve()
+      })
+      child.on('error', (err) => {
+        Log.error('Failed to start command:', err)
+        reject(err)
+      })
     })
   } finally {
     process.chdir(currentDir)
