@@ -68,6 +68,18 @@
         "icon": "$(diff)"
       },
       {
+        "command": "hit.commit",
+        "title": "Commit",
+        "category": "Hit",
+        "icon": "$(check)"
+      },
+      {
+        "command": "hit.push",
+        "title": "Push",
+        "category": "Hit",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "hit.switchBranch",
         "title": "Switch Branch",
         "category": "Hit",
@@ -94,6 +106,16 @@
           "command": "hit.refresh",
           "when": "view == hitSourceControl",
           "group": "navigation"
+        },
+        {
+          "command": "hit.commit",
+          "when": "view == hitSourceControl",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hit.push",
+          "when": "view == hitSourceControl",
+          "group": "navigation@1"
         },
         {
           "command": "hit.switchBranch",

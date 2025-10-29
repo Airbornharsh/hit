@@ -43,10 +43,6 @@ export async function activate(context: vscode.ExtensionContext) {
       await hitSourceControlProvider.refresh()
     }),
 
-    vscode.commands.registerCommand('hit.actionButton', () => {
-      vscode.window.showInformationMessage('Action button clicked! 🚀')
-    }),
-
     vscode.commands.registerCommand('hit.toggleFolderHierarchy', () => {
       hitSourceControlProvider.toggleFolderHierarchy()
     }),
@@ -103,6 +99,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('hit.refresh', async () => {
       await hitSourceControlProvider.refresh()
+    }),
+
+    vscode.commands.registerCommand('hit.commit', async () => {
+      await hitSourceControlProvider.commit()
+    }),
+
+    vscode.commands.registerCommand('hit.push', async () => {
+      await hitSourceControlProvider.push()
     }),
 
     vscode.commands.registerCommand('hit.switchBranch', async () => {

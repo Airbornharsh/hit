@@ -303,20 +303,42 @@ export class HitSourceControlProvider
       ),
     )
 
+    // Commit button
     rootItems.push(
       new HitTreeItem(
-        '🚀 Commit Button',
+        'Commit',
         vscode.TreeItemCollapsibleState.None,
         {
-          command: 'hit.actionButton',
+          command: 'hit.commit',
           title: 'Commit Changes',
           arguments: [],
         },
-        new vscode.ThemeIcon('play'),
-        'action-button',
+        new vscode.ThemeIcon('check'),
+        'commit-button',
         undefined,
-        'Click to commit changes',
-        'Commit changes to the repository',
+        'Commit staged changes',
+        undefined,
+        undefined,
+        undefined,
+        mainRepo.name,
+      ),
+    )
+
+    // Push button
+    rootItems.push(
+      new HitTreeItem(
+        'Push',
+        vscode.TreeItemCollapsibleState.None,
+        {
+          command: 'hit.push',
+          title: 'Push',
+          arguments: [],
+        },
+        new vscode.ThemeIcon('cloud-upload'),
+        'push-button',
+        undefined,
+        'Push current branch',
+        undefined,
         undefined,
         undefined,
         mainRepo.name,
@@ -657,11 +679,44 @@ export class HitSourceControlProvider
     }
   }
 
-  async commit(message: string): Promise<void> {
-    if (this.currentRepository) {
-      vscode.window.showInformationMessage(`Commit: ${message}`)
-      this._onDidChangeTreeData.fire()
+  async commit(message?: string): Promise<void> {
+    const repo = this.getRepository()
+    if (!repo) {
+      vscode.window.showWarningMessage('No repository detected')
+      return
     }
+
+    let finalMessage = message || this.getCommitMessage()
+    if (!finalMessage) {
+      finalMessage =
+        (await vscode.window.showInputBox({
+          prompt: 'Commit message',
+          placeHolder: `Message (⌘⏎ to commit on "${this.getCurrentBranch()}")`,
+          value: '',
+          valueSelection: [0, 0],
+        })) || ''
+      if (!finalMessage) return
+      this.setCommitMessage(finalMessage)
+    }
+
+    const safeMsg = finalMessage.replace(/"/g, '\\"')
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Committing to ${repo.branch}...`,
+      },
+      async () => {
+        try {
+          await cmdRunExec(`hit commit -m "${safeMsg}"`, repo.path)
+          await this.refresh()
+          vscode.window.showInformationMessage('Commit completed')
+        } catch (err: any) {
+          const msg = err?.message || String(err) || 'Unknown error'
+          vscode.window.showErrorMessage(`Commit failed: ${msg}`)
+        }
+      },
+    )
   }
 
   discard(item: HitTreeItem): void {
@@ -1074,8 +1129,29 @@ export class HitSourceControlProvider
     vscode.window.showInformationMessage('Pulled changes')
   }
 
-  push(): void {
-    vscode.window.showInformationMessage('Pushed changes')
+  async push(): Promise<void> {
+    const repo = this.getRepository()
+    if (!repo) {
+      vscode.window.showWarningMessage('No repository detected')
+      return
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Pushing ${repo.branch}...`,
+      },
+      async () => {
+        try {
+          await cmdRunExec('hit push', repo.path)
+          await this.refresh()
+          vscode.window.showInformationMessage('Push completed')
+        } catch (err: any) {
+          const msg = err?.message || String(err) || 'Unknown error'
+          vscode.window.showErrorMessage(`Push failed: ${msg}`)
+        }
+      },
+    )
   }
 
   fetch(): void {
