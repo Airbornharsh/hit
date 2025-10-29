@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
@@ -244,4 +245,103 @@ func HandleStatusCommand() go_types.Output {
 		Data:    statusData,
 		Message: "Status retrieved successfully",
 	}
+}
+
+func HandleDiffContentCommand(commandParts []string) go_types.Output {
+	if len(commandParts) < 2 {
+		return go_types.Output{Success: false, Message: "usage: diff-content <mode> <relPath>"}
+	}
+	mode := commandParts[0]
+	relPath := strings.Join(commandParts[1:], " ")
+
+	repoRoot, err := storage.FindRepoRoot()
+	if err != nil {
+		return go_types.Output{Success: false, Message: fmt.Sprintf("failed to find repo root: %v", err)}
+	}
+
+	// Normalize relPath to forward slashes
+	rel := filepath.ToSlash(relPath)
+
+	headContent, headOk, err := getHeadContent(rel)
+	if err != nil {
+		return go_types.Output{Success: false, Message: fmt.Sprintf("failed to read HEAD content: %v", err)}
+	}
+
+	left := ""
+	right := ""
+	leftLabel := ""
+	rightLabel := ""
+
+	switch mode {
+	case "unstaged":
+		idxContent, _, err := getIndexContent(rel)
+		if err != nil {
+			return go_types.Output{Success: false, Message: fmt.Sprintf("failed to read INDEX content: %v", err)}
+		}
+		left = idxContent
+		leftLabel = "INDEX"
+		wsBytes, _ := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		right = string(wsBytes)
+		rightLabel = "WORKSPACE"
+	case "staged":
+		if headOk {
+			left = headContent
+		}
+		leftLabel = "HEAD"
+		idxContent, _, err := getIndexContent(rel)
+		if err != nil {
+			return go_types.Output{Success: false, Message: fmt.Sprintf("failed to read INDEX content: %v", err)}
+		}
+		right = idxContent
+		rightLabel = "INDEX"
+	default:
+		return go_types.Output{Success: false, Message: fmt.Sprintf("unknown mode: %s", mode)}
+	}
+
+	data := map[string]string{
+		"left":       left,
+		"right":      right,
+		"leftLabel":  leftLabel,
+		"rightLabel": rightLabel,
+		"relPath":    rel,
+	}
+
+	return go_types.Output{Success: true, Data: data, Message: "diff content"}
+}
+
+func getHeadContent(relPath string) (string, bool, error) {
+	tree, err := storage.GetHeadTree()
+	if err != nil {
+		return "", false, err
+	}
+	hash, ok := tree.Entries[relPath]
+	if !ok || hash == "" {
+		return "", false, nil
+	}
+	content, err := storage.LoadObject(hash)
+	if err != nil {
+		return "", false, err
+	}
+	return content, true, nil
+}
+
+func getIndexContent(relPath string) (string, bool, error) {
+	indexPath := filepath.Join(".hit", "index.json")
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return "", false, err
+	}
+	var index go_types.Index
+	if err := storage.Unmarshal(data, &index); err != nil {
+		return "", false, err
+	}
+	hash, ok := index.Entries[relPath]
+	if !ok || hash == "" {
+		return "", false, nil
+	}
+	content, err := storage.LoadObject(hash)
+	if err != nil {
+		return "", false, err
+	}
+	return content, true, nil
 }

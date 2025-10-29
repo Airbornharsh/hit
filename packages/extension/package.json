@@ -60,6 +60,12 @@
         "title": "Discard Changes",
         "category": "Hit",
         "icon": "$(discard)"
+      },
+      {
+        "command": "hit.openDiff",
+        "title": "Open Diff",
+        "category": "Hit",
+        "icon": "$(diff)"
       }
     ],
     "views": {
@@ -99,6 +105,11 @@
           "command": "hit.unstage",
           "when": "view == hitSourceControl && (viewItem == staged-file || viewItem == staged-folder || viewItem == staged-section)",
           "group": "inline"
+        },
+        {
+          "command": "hit.openDiff",
+          "when": "view == hitSourceControl && (viewItem == staged-file || viewItem == uncommitted-file)",
+          "group": "navigation@1"
         }
       ]
     },

@@ -71,6 +71,8 @@ var repoExtensionCmd = &cobra.Command{
 			output = extension.HandleStatusCommand()
 		case "commit-tree":
 			output = extension.HandleCommitTreeCommand(commandParts[1:])
+		case "diff-content":
+			output = extension.HandleDiffContentCommand(commandParts[1:])
 		default:
 			output = go_types.Output{
 				Success: false,
