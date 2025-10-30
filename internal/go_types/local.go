@@ -31,5 +31,5 @@ type Commit struct {
 }
 
 func TimeNow() time.Time {
-	return time.Now()
+	return time.Now().UTC()
 }

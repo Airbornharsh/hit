@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/repo"
@@ -75,7 +74,7 @@ func CreateCommit(message string) (string, error) {
 		OtherParent: otherParent,
 		Message:     message,
 		Author:      os.Getenv("USER"),
-		Timestamp:   time.Now(),
+		Timestamp:   go_types.TimeNow(),
 	}
 
 	var commits []go_types.Commit
