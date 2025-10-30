@@ -274,14 +274,11 @@ func UpdateWorkingDirectoryAndIndexFromCommit(commitHash string) error {
 		return err
 	}
 
-	index := &go_types.Index{
-		Entries: tree.Entries,
-		Changed: false,
-	}
-
 	indexPath := filepath.Join(".hit", "index.json")
-
-	fmt.Println("\n\n", index)
+	currentIndex := &go_types.Index{Entries: make(map[string]string)}
+	if data, err := os.ReadFile(indexPath); err == nil {
+		_ = json.Unmarshal(data, currentIndex)
+	}
 
 	ignoreMatcher, err := GetIgnoreMatcher()
 	if err != nil {
@@ -292,40 +289,46 @@ func UpdateWorkingDirectoryAndIndexFromCommit(commitHash string) error {
 		ignoreMatcher, _ = NewIgnoreMatcher(repoRoot)
 	}
 
-	for filePath := range index.Entries {
+	for filePath := range currentIndex.Entries {
 		if _, exists := tree.Entries[filePath]; !exists {
 			if !ignoreMatcher.ShouldIgnore(filePath, false) {
 				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
 					return fmt.Errorf("failed to remove file %s: %v", filePath, err)
 				}
 			}
+			delete(currentIndex.Entries, filePath)
+			currentIndex.Changed = true
 		}
 	}
 
 	for filePath, objectHash := range tree.Entries {
-		if !ignoreMatcher.ShouldIgnore(filePath, false) {
-			err := RestoreFileFromObject(filePath, objectHash)
-			if err != nil {
+		if ignoreMatcher.ShouldIgnore(filePath, false) {
+			continue
+		}
+		needRestore := false
+		if existingHash, ok := currentIndex.Entries[filePath]; !ok || existingHash != objectHash {
+			needRestore = true
+		} else {
+			if _, statErr := os.Stat(filePath); statErr != nil {
+				needRestore = true
+			}
+		}
+		if needRestore {
+			if err := RestoreFileFromObject(filePath, objectHash); err != nil {
 				return fmt.Errorf("failed to restore file %s: %v", filePath, err)
 			}
 		}
+		currentIndex.Entries[filePath] = objectHash
 	}
 
-	newIndex := &go_types.Index{
-		Entries: tree.Entries,
-		Changed: false,
-	}
-
-	newIndexData, err := json.MarshalIndent(newIndex, "", "  ")
+	currentIndex.Changed = false
+	newIndexData, err := json.MarshalIndent(currentIndex, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal new index: %v", err)
 	}
-
-	err = os.WriteFile(indexPath, newIndexData, 0644)
-	if err != nil {
+	if err := os.WriteFile(indexPath, newIndexData, 0644); err != nil {
 		return fmt.Errorf("failed to write new index: %v", err)
 	}
-
 	return nil
 }
 

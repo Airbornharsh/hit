@@ -74,18 +74,33 @@ func fetchRemoteBranches(remoteName string, branches []struct {
 	} `json:"commits"`
 }) error {
 	for _, branch := range branches {
-		refPath := filepath.Join(".hit", "refs", "remotes", remoteName, branch.Name)
-		err := os.WriteFile(refPath, []byte(branch.HeadCommit), 0644)
+		refPath := filepath.Join(".hit", "refs", "heads", branch.Name)
+		refRemotePath := filepath.Join(".hit", "refs", "remotes", remoteName, branch.Name)
+		err := os.WriteFile(refRemotePath, []byte(branch.HeadCommit), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to create remote ref for %s: %v", branch.Name, err)
 		}
 
-		logPath := filepath.Join(".hit", "logs", "refs", "remotes", remoteName, branch.Name)
-		logData, err := json.Marshal(branch.Commits)
+		if _, err := os.Stat(refPath); os.IsNotExist(err) {
+			err = os.WriteFile(refPath, []byte(branch.HeadCommit), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to create local ref for %s: %v", branch.Name, err)
+			}
+		}
+
+		logRemotePath := filepath.Join(".hit", "logs", "refs", "remotes", remoteName, branch.Name)
+		logRemoteData, err := json.Marshal(branch.Commits)
 		if err != nil {
 			return fmt.Errorf("failed to marshal commits for %s: %v", branch.Name, err)
 		}
-		err = os.WriteFile(logPath, logData, 0644)
+		logPath := filepath.Join(".hit", "logs", "refs", "heads", branch.Name)
+		if _, err := os.Stat(logPath); os.IsNotExist(err) {
+			err = os.WriteFile(logPath, []byte(logRemoteData), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to create local log for %s: %v", branch.Name, err)
+			}
+		}
+		err = os.WriteFile(logRemotePath, logRemoteData, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to create remote log for %s: %v", branch.Name, err)
 		}
