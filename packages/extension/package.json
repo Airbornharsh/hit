@@ -84,6 +84,12 @@
         "title": "Switch Branch",
         "category": "Hit",
         "icon": "$(git-branch)"
+      },
+      {
+        "command": "hit.showGraph",
+        "title": "Show Graph",
+        "category": "Hit",
+        "icon": "$(graph)"
       }
     ],
     "views": {
@@ -119,6 +125,11 @@
         },
         {
           "command": "hit.switchBranch",
+          "when": "view == hitSourceControl",
+          "group": "navigation@2"
+        },
+        {
+          "command": "hit.showGraph",
           "when": "view == hitSourceControl",
           "group": "navigation@2"
         }

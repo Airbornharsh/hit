@@ -79,13 +79,6 @@ func InitializeIndex() {
 
 	// Process each file
 	for filePath := range existingFiles {
-		// Convert absolute path to relative path
-		relPath, err := filepath.Rel(repoRoot, filePath)
-		if err != nil {
-			fmt.Printf("Error converting path %s: %v\n", filePath, err)
-			continue
-		}
-
 		// Read file content
 		content, err := os.ReadFile(filePath)
 		if err != nil {
@@ -103,7 +96,7 @@ func InitializeIndex() {
 		}
 
 		// Add to index
-		index.Entries[relPath] = hash
+		index.Entries[filePath] = hash
 		index.Changed = true
 	}
 

@@ -234,19 +234,24 @@ func isAlreadyMerged(remoteName, targetBranch, currentCommit string) bool {
 func performThreeWayMerge(remoteName, currentCommit, targetCommit, currentBranch, targetBranch, commonAncestor string) error {
 	fmt.Printf("Performing three-way merge...\n")
 
-	mergedTree, hasConflicts, err := performThreeWayFileMerge(currentCommit, targetCommit, commonAncestor)
+	mergedTree, hasConflicts, err := performThreeWayFileMerge(remoteName, targetBranch, currentCommit, targetCommit, commonAncestor)
 	if err != nil {
 		return fmt.Errorf("failed to perform three-way file merge: %v", err)
 	}
 
 	if hasConflicts {
-		fmt.Printf("✅ Three-way merge completed successfully\n")
+		fmt.Printf("✅ [C]Three-way merge completed successfully\n")
 		return nil
 	}
 
 	mergeCommit, err := createMergeCommitWithTree(currentCommit, targetCommit, currentBranch, targetBranch, mergedTree)
 	if err != nil {
 		return fmt.Errorf("failed to create merge commit: %v", err)
+	}
+
+	err = UpdateLocalLog(remoteName, currentBranch, mergeCommit, commonAncestor)
+	if err != nil {
+		return fmt.Errorf("failed to update local log: %v", err)
 	}
 
 	refPath := filepath.Join(".hit", "refs", "heads", currentBranch)
@@ -260,16 +265,11 @@ func performThreeWayMerge(remoteName, currentCommit, targetCommit, currentBranch
 		return fmt.Errorf("failed to update working directory: %v", err)
 	}
 
-	err = UpdateLocalLog(remoteName, currentBranch, mergeCommit)
-	if err != nil {
-		return fmt.Errorf("failed to update local log: %v", err)
-	}
-
-	fmt.Printf("✅ Three-way merge completed successfully\n")
+	fmt.Printf("✅ [N]Three-way merge completed successfully\n")
 	return nil
 }
 
-func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit) error {
+func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit, commonAncestor string) error {
 	logPath := filepath.Join(".hit", "logs", "refs", "heads", branchName)
 	logRemotePath := filepath.Join(".hit", "logs", "refs", "remotes", remoteName, branchName)
 
@@ -295,6 +295,15 @@ func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit) erro
 		}
 	}
 
+	commonAncestorIndex := -1
+	for i, commit := range remoteCommits {
+		if commit.Hash == commonAncestor {
+			commonAncestorIndex = i
+			break
+		}
+	}
+	newCommits := remoteCommits[commonAncestorIndex:]
+
 	commits = append(commits, *commit)
 
 	commitExists := make(map[string]bool)
@@ -303,6 +312,13 @@ func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit) erro
 	}
 
 	for _, commit := range remoteCommits {
+		if commitExists[commit.Hash] {
+			continue
+		}
+		commits = append(commits, commit)
+	}
+
+	for _, commit := range newCommits {
 		if commitExists[commit.Hash] {
 			continue
 		}
@@ -357,20 +373,43 @@ func updateLocalLogWithRemoteCommits(remoteName, branchName string) error {
 		return fmt.Errorf("failed to get remote commits: %v", err)
 	}
 
-	err = storage.UpdateHeadCommits(branchName, remoteCommits)
+	localCommits, err := storage.GetHeadCommits(branchName)
 	if err != nil {
-		return fmt.Errorf("failed to update head commits: %v", err)
+		localCommits = []go_types.Commit{}
 	}
 
-	err = storage.UpdateHeadRef(branchName, remoteCommits[len(remoteCommits)-1].Hash)
+	commitExists := make(map[string]bool)
+	for _, commit := range localCommits {
+		commitExists[commit.Hash] = true
+	}
+
+	allCommits := make([]go_types.Commit, 0, len(localCommits)+len(remoteCommits))
+	allCommits = append(allCommits, localCommits...)
+
+	for _, commit := range remoteCommits {
+		if !commitExists[commit.Hash] {
+			allCommits = append(allCommits, commit)
+		}
+	}
+
+	slices.SortFunc(allCommits, func(a, b go_types.Commit) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return -1
+		} else if a.Timestamp.After(b.Timestamp) {
+			return 1
+		}
+		return 0
+	})
+
+	err = storage.UpdateHeadCommits(branchName, allCommits)
 	if err != nil {
-		return fmt.Errorf("failed to update head ref: %v", err)
+		return fmt.Errorf("failed to update head commits: %v", err)
 	}
 
 	return nil
 }
 
-func performThreeWayFileMerge(currentCommit, targetCommit, commonAncestor string) (*go_types.Tree, bool, error) {
+func performThreeWayFileMerge(remoteName, targetBranch, currentCommit, targetCommit, commonAncestor string) (*go_types.Tree, bool, error) {
 	currentTree, err := storage.GetCommitTree(currentCommit)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get current tree: %v", err)
@@ -417,7 +456,7 @@ func performThreeWayFileMerge(currentCommit, targetCommit, commonAncestor string
 			return nil, false, err
 		}
 
-		if hasConflictMarkers(mergedContent) {
+		if HasConflictMarkers(mergedContent) {
 			conflictResolution.AddConflict(file, currentHash, targetHash, ancestorHash, mergedContent)
 			hasConflicts = true
 		} else {
@@ -427,6 +466,24 @@ func performThreeWayFileMerge(currentCommit, targetCommit, commonAncestor string
 	}
 
 	if hasConflicts {
+		var remoteCommits []go_types.Commit
+		allRemoteCommits, err := storage.GetRemoteCommits(remoteName, targetBranch)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get remote commits: %v", err)
+		}
+
+		for i, commit := range allRemoteCommits {
+			if commit.Parent == commonAncestor {
+				remoteCommits = allRemoteCommits[i:]
+				break
+			}
+		}
+
+		err = conflictResolution.AddRemoteCommits(remoteCommits)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to add remote commits: %v", err)
+		}
+
 		err = conflictResolution.SaveConflictResolution()
 		if err != nil {
 			return nil, true, err
@@ -497,13 +554,18 @@ func createMergeCommitWithTree(currentCommit, targetCommit, currentBranch, targe
 		Timestamp:   go_types.TimeNow(),
 	}
 
-	return &commit, nil
-}
+	commitData, err := json.Marshal(commit)
+	if err != nil {
+		return nil, err
+	}
 
-func hasConflictMarkers(content string) bool {
-	return strings.Contains(content, "<<<<<<<") &&
-		strings.Contains(content, "=======") &&
-		strings.Contains(content, ">>>>>>>")
+	hash := storage.Hash(commitData)
+	err = storage.WriteObject(hash, commitData)
+	if err != nil {
+		return nil, err
+	}
+
+	return &commit, nil
 }
 
 func updateWorkingDirectoryWithConflictsAndNonConflicts(conflictResolution *ConflictResolution, nonConflictFiles map[string]string) error {

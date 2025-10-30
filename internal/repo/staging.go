@@ -56,6 +56,18 @@ func AddFile(filePath string) (string, error) {
 		return "", err
 	}
 
+	if HasConflictMarkers(string(content)) {
+		return "", fmt.Errorf("file contains unresolved conflict markers: %s (resolve conflicts before adding)", filePath)
+	}
+
+	conflictResolution, err := LoadConflictResolution()
+	if err == nil && conflictResolution != nil {
+		if CheckFileForConflicts(relPath) {
+			conflictResolution.MarkResolved(relPath)
+			conflictResolution.SaveConflictResolution()
+		}
+	}
+
 	hash := storage.Hash(content)
 
 	if err := storage.WriteObject(hash, content); err != nil {

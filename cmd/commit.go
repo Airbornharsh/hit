@@ -16,8 +16,7 @@ var commitCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		hash, err := commit.CreateCommit(message)
 		if err != nil {
-			println("Error creating commit:", err)
-			return
+			panic(err)
 		}
 
 		fmt.Printf("[hit] Commit created: %s\n", hash)

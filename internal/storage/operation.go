@@ -230,18 +230,13 @@ func GetCommitObject(branchName, commitHash string) (*go_types.Commit, error) {
 		return nil, err
 	}
 
-	commitData, err := LoadObject(commitHash)
-	if err != nil {
-		return nil, err
+	for _, commit := range commits {
+		if commit.Hash == commitHash {
+			return &commit, nil
+		}
 	}
 
-	var commit go_types.Commit
-	err = json.Unmarshal([]byte(commitData), &commit)
-	if err != nil {
-		return nil, err
-	}
-
-	return &commit, nil
+	return nil, fmt.Errorf("commit not found: %s", commitHash)
 }
 
 func GetRemoteCommitObject(remoteName, branchName, commitHash string) (*go_types.Commit, error) {
@@ -264,18 +259,13 @@ func GetRemoteCommitObject(remoteName, branchName, commitHash string) (*go_types
 		return nil, err
 	}
 
-	commitData, err := LoadObject(commitHash)
-	if err != nil {
-		return nil, err
+	for _, commit := range commits {
+		if commit.Hash == commitHash {
+			return &commit, nil
+		}
 	}
 
-	var commit go_types.Commit
-	err = json.Unmarshal([]byte(commitData), &commit)
-	if err != nil {
-		return nil, err
-	}
-
-	return &commit, nil
+	return nil, fmt.Errorf("commit not found: %s", commitHash)
 }
 
 func UpdateWorkingDirectoryAndIndexFromCommit(commitHash string) error {

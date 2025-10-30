@@ -346,42 +346,38 @@ export class HitSourceControlProvider
     )
 
     // Staged Changes section
-    if (mainRepo.stagedFileStatuses.size > 0) {
-      rootItems.push(
-        new HitTreeItem(
-          'Staged Changes',
-          vscode.TreeItemCollapsibleState.Expanded,
-          undefined,
-          new vscode.ThemeIcon('check'),
-          'staged-section',
-          undefined,
-          `${mainRepo.stagedFileStatuses.size}`,
-          undefined,
-          undefined,
-          undefined,
-          mainRepo.name,
-        ),
-      )
-    }
+    rootItems.push(
+      new HitTreeItem(
+        'Staged Changes',
+        vscode.TreeItemCollapsibleState.Expanded,
+        undefined,
+        new vscode.ThemeIcon('check'),
+        'staged-section',
+        undefined,
+        `${mainRepo.stagedFileStatuses.size}`,
+        undefined,
+        undefined,
+        undefined,
+        mainRepo.name,
+      ),
+    )
 
     // Changes section
-    if (mainRepo.uncommittedFileStatuses.size > 0) {
-      rootItems.push(
-        new HitTreeItem(
-          'Changes',
-          vscode.TreeItemCollapsibleState.Expanded,
-          undefined,
-          new vscode.ThemeIcon('diff'),
-          'uncommitted-section',
-          undefined,
-          `${mainRepo.uncommittedFileStatuses.size}`,
-          undefined,
-          undefined,
-          undefined,
-          mainRepo.name,
-        ),
-      )
-    }
+    rootItems.push(
+      new HitTreeItem(
+        'Changes',
+        vscode.TreeItemCollapsibleState.Expanded,
+        undefined,
+        new vscode.ThemeIcon('diff'),
+        'uncommitted-section',
+        undefined,
+        `${mainRepo.uncommittedFileStatuses.size}`,
+        undefined,
+        undefined,
+        undefined,
+        mainRepo.name,
+      ),
+    )
 
     return Promise.resolve(rootItems)
   }
@@ -709,6 +705,7 @@ export class HitSourceControlProvider
       async () => {
         try {
           await cmdRunExec(`hit commit -m "${safeMsg}"`, repo.path)
+          this.setCommitMessage('')
           await this.refresh()
           vscode.window.showInformationMessage('Commit completed')
         } catch (err: any) {

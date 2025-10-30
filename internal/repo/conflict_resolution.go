@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/airbornharsh/hit/internal/go_types"
 	"github.com/airbornharsh/hit/internal/storage"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
@@ -20,12 +21,13 @@ type ConflictFile struct {
 }
 
 type ConflictResolution struct {
-	Parent       string         `json:"parent"`
-	OtherParent  string         `json:"otherParent"`
-	Conflicts    []ConflictFile `json:"conflicts"`
-	Resolved     []string       `json:"resolved"`
-	IsMergeState bool           `json:"isMergeState"`
-	Message      string         `json:"message"`
+	Parent        string            `json:"parent"`
+	OtherParent   string            `json:"otherParent"`
+	Conflicts     []ConflictFile    `json:"conflicts"`
+	Resolved      []string          `json:"resolved"`
+	IsMergeState  bool              `json:"isMergeState"`
+	Message       string            `json:"message"`
+	RemoteCommits []go_types.Commit `json:"remoteCommits"`
 }
 
 func PerformAdvancedFileMerge(currentHash, targetHash string) (string, string, bool, error) {
@@ -131,21 +133,23 @@ func createConflictMarkers(diffs []diffmatchpatch.Diff) string {
 // CreateConflictResolution creates a new conflict resolution session
 func CreateConflictResolution() *ConflictResolution {
 	return &ConflictResolution{
-		Conflicts:    []ConflictFile{},
-		Resolved:     []string{},
-		IsMergeState: false,
+		Conflicts:     []ConflictFile{},
+		Resolved:      []string{},
+		IsMergeState:  false,
+		RemoteCommits: []go_types.Commit{},
 	}
 }
 
 // CreateMergeConflictResolution creates a new conflict resolution session for merge
 func CreateMergeConflictResolution(parent, otherParent, message string) *ConflictResolution {
 	return &ConflictResolution{
-		Parent:       parent,
-		OtherParent:  otherParent,
-		Message:      message,
-		Conflicts:    []ConflictFile{},
-		Resolved:     []string{},
-		IsMergeState: true,
+		Parent:        parent,
+		OtherParent:   otherParent,
+		Message:       message,
+		Conflicts:     []ConflictFile{},
+		Resolved:      []string{},
+		IsMergeState:  true,
+		RemoteCommits: []go_types.Commit{},
 	}
 }
 
@@ -207,6 +211,11 @@ func (cr *ConflictResolution) SaveConflictResolution() error {
 		return fmt.Errorf("failed to save conflict resolution: %v", err)
 	}
 
+	return nil
+}
+
+func (cr *ConflictResolution) AddRemoteCommits(remoteCommits []go_types.Commit) error {
+	cr.RemoteCommits = remoteCommits
 	return nil
 }
 
@@ -275,4 +284,10 @@ func CheckFileForConflicts(filePath string) bool {
 	}
 
 	return false
+}
+
+func HasConflictMarkers(content string) bool {
+	return strings.Contains(content, "<<<<<<<") &&
+		strings.Contains(content, "=======") &&
+		strings.Contains(content, ">>>>>>>")
 }

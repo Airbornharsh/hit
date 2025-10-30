@@ -29,27 +29,12 @@ var addCmd = &cobra.Command{
 				if info, err := os.Stat(file); err == nil && info.IsDir() {
 					repo.AddAllFile(filePath)
 				} else {
-					// Check if this file has unresolved conflicts
-					if repo.CheckFileForConflicts(file) {
-						fmt.Printf("Cannot add file %s: has unresolved merge conflicts\n", file)
-						continue
-					}
-
-					// Try to add the file (AddFile will handle non-existent files)
 					_, err := repo.AddFile(filePath)
 					if err != nil {
-						// Don't print error for non-existent files as AddFile already handles it
 						if !strings.Contains(err.Error(), "file does not exist") {
 							fmt.Printf("Error adding file %s: %v\n", file, err)
 						}
 						continue
-					}
-
-					// Check if this file was part of a merge conflict and mark it as resolved
-					conflictResolution, err := repo.LoadConflictResolution()
-					if err == nil && conflictResolution != nil {
-						conflictResolution.MarkResolved(file)
-						conflictResolution.SaveConflictResolution()
 					}
 				}
 			}

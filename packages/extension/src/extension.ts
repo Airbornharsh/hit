@@ -10,6 +10,7 @@ import {
 } from './util/diffProvider'
 import { cmdRun, CommandInput, CommandOutput } from './util/cmdRun'
 import Log from './util/log'
+import { GraphPanel } from './util/graphPanel'
 
 export async function activate(context: vscode.ExtensionContext) {
   Log.log('Congratulations, your extension "hit" is now active!')
@@ -111,6 +112,23 @@ export async function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('hit.switchBranch', async () => {
       await (hitSourceControlProvider as any).openSwitchBranchQuickPick()
+    }),
+
+    vscode.commands.registerCommand('hit.showGraph', async () => {
+      const repo = hitSourceControlProvider.getRepository()
+      if (!repo) {
+        vscode.window.showWarningMessage('No repository detected')
+        return
+      }
+      const res = await cmdRun<CommandInput, CommandOutput>({
+        command: 'graph-log',
+        workspaceDir: repo.path,
+      })
+      if (!res.success) {
+        vscode.window.showErrorMessage(res.message || 'Failed to load graph')
+        return
+      }
+      GraphPanel.show(context, `Hit Graph — ${repo.name}`, res.data)
     }),
   ]
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 func CreateCommit(message string) (string, error) {
 	// Check for unresolved merge conflicts
 	conflictResolution, err := repo.LoadConflictResolution()
+	var remoteCommits []go_types.Commit
+
 	if conflictResolution != nil {
 		if err == nil && conflictResolution.HasUnresolvedConflicts() {
 			unresolved := conflictResolution.GetUnresolvedConflicts()
@@ -27,6 +30,9 @@ func CreateCommit(message string) (string, error) {
 			return "", fmt.Errorf("cannot commit: unresolved merge conflicts in files: %v", filePaths)
 		}
 
+		if len(conflictResolution.RemoteCommits) > 0 {
+			remoteCommits = append(remoteCommits, conflictResolution.RemoteCommits...)
+		}
 		if conflictResolution.Message != "" {
 			message = conflictResolution.Message
 		}
@@ -77,6 +83,21 @@ func CreateCommit(message string) (string, error) {
 	json.Unmarshal(parentLogFile, &commits)
 
 	commits = append(commits, commit)
+	for _, remoteCommit := range remoteCommits {
+		if remoteCommit.Hash == commit.Hash {
+			continue
+		}
+		commits = append(commits, remoteCommit)
+	}
+
+	slices.SortFunc(commits, func(a, b go_types.Commit) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return -1
+		} else if a.Timestamp.After(b.Timestamp) {
+			return 1
+		}
+		return 0
+	})
 
 	commitsData, _ := json.Marshal(commits)
 
