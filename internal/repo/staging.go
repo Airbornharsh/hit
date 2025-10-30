@@ -97,13 +97,13 @@ func AddFile(filePath string) (string, error) {
 	return hash, nil
 }
 
-func AddAllFile(currentDir string) {
+func AddAllFile(currentDir string) error {
 	var pwd = "/"
 	if currentDir == "." {
 		var pwdError error
 		pwd, pwdError = os.Getwd()
 		if pwdError != nil {
-			return
+			return pwdError
 		}
 	} else {
 		pwd = currentDir
@@ -111,7 +111,7 @@ func AddAllFile(currentDir string) {
 
 	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {
-		return
+		return err
 	}
 
 	indexFile := filepath.Join(".hit", "index.json")
@@ -124,7 +124,10 @@ func AddAllFile(currentDir string) {
 
 	for filePath := range existingFiles {
 		absPath := filepath.Join(repoRoot, filePath)
-		AddFile(absPath)
+		_, err := AddFile(absPath)
+		if err != nil {
+			return err
+		}
 	}
 
 	for filePath := range index.Entries {
@@ -135,6 +138,8 @@ func AddAllFile(currentDir string) {
 			}
 		}
 	}
+
+	return nil
 }
 
 func ResetFile(filePath string) (string, error) {

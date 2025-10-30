@@ -512,6 +512,13 @@ func performThreeWayFileMerge(remoteName, targetBranch, currentCommit, targetCom
 }
 
 func mergeFileThreeWay(currentHash, targetHash string) (string, string, error) {
+	if targetHash == "" {
+		content, err := storage.GetFileContentFromHash(currentHash)
+		if err != nil {
+			return "", "", err
+		}
+		return currentHash, content, nil
+	}
 	if currentHash == targetHash {
 		content, err := storage.GetFileContentFromHash(currentHash)
 		if err != nil {
@@ -595,6 +602,9 @@ func updateWorkingDirectoryWithConflictsAndNonConflicts(conflictResolution *Conf
 	}
 
 	for filePath, objectHash := range nonConflictFiles {
+		if objectHash == "" {
+			continue
+		}
 		err := storage.RestoreFileFromObject(filePath, objectHash)
 		if err != nil {
 			return err

@@ -313,6 +313,9 @@ func UpdateWorkingDirectoryAndIndexFromCommit(commitHash string) error {
 				needRestore = true
 			}
 		}
+		if objectHash == "" {
+			continue
+		}
 		if needRestore {
 			if err := RestoreFileFromObject(filePath, objectHash); err != nil {
 				return fmt.Errorf("failed to restore file %s: %v", filePath, err)
