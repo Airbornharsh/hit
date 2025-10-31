@@ -823,3 +823,41 @@ func HandleCommitFilesCommand(commandParts []string) go_types.Output {
 		Message: "commit files retrieved",
 	}
 }
+
+func HandlePushStatusCommand() go_types.Output {
+	_, err := storage.FindRepoRoot()
+	if err != nil {
+		return go_types.Output{Success: false, Message: fmt.Sprintf("failed to find repo root: %v", err)}
+	}
+	branch, err := storage.GetBranch()
+	if err != nil || branch == "" {
+		return go_types.Output{Success: false, Message: "failed to get current branch"}
+	}
+	local, err := storage.GetHeadCommits(branch)
+	if err != nil {
+		return go_types.Output{Success: false, Message: fmt.Sprintf("failed to read local commits: %v", err)}
+	}
+	remote, err := storage.GetRemoteCommits("origin", branch)
+	if err != nil {
+		remote = []go_types.Commit{}
+	}
+	remoteSet := make(map[string]bool, len(remote))
+	for _, c := range remote {
+		remoteSet[c.Hash] = true
+	}
+	ahead := 0
+	for _, c := range local {
+		if !remoteSet[c.Hash] {
+			ahead++
+		}
+	}
+	return go_types.Output{
+		Success: true,
+		Data: map[string]any{
+			"branch":     branch,
+			"aheadCount": ahead,
+			"needPush":   ahead > 0,
+		},
+		Message: "push status",
+	}
+}

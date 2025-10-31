@@ -48,6 +48,13 @@ export async function activate(context: vscode.ExtensionContext) {
       hitSourceControlProvider.toggleFolderHierarchy()
     }),
 
+    vscode.commands.registerCommand('hit.toggleFolderHierarchy.tree', () => {
+      hitSourceControlProvider.toggleFolderHierarchy()
+    }),
+    vscode.commands.registerCommand('hit.toggleFolderHierarchy.list', () => {
+      hitSourceControlProvider.toggleFolderHierarchy()
+    }),
+
     vscode.commands.registerCommand('hit.stage', (item: HitTreeItem) => {
       hitSourceControlProvider.stage(item)
     }),
@@ -126,7 +133,11 @@ export async function activate(context: vscode.ExtensionContext) {
       const pick = await vscode.window.showQuickPick(
         [
           { label: 'Pull', description: 'hit pull', action: 'pull' },
-          { label: 'Push', description: 'hit push', action: 'push' },
+          {
+            label: 'Push' + hitSourceControlProvider.getPushAheadCount(),
+            description: 'hit push',
+            action: 'push',
+          },
           { label: 'Fetch', description: 'hit fetch', action: 'fetch' },
           {
             label: 'Checkout to…',

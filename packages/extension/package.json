@@ -38,6 +38,18 @@
         "icon": "$(list-unordered)"
       },
       {
+        "command": "hit.toggleFolderHierarchy.tree",
+        "title": "Toggle Tree/List View",
+        "category": "Hit",
+        "icon": "$(symbol-structure)"
+      },
+      {
+        "command": "hit.toggleFolderHierarchy.list",
+        "title": "Toggle Tree/List View",
+        "category": "Hit",
+        "icon": "$(list-unordered)"
+      },
+      {
         "command": "hit.refresh",
         "title": "Refresh",
         "category": "Hit",
@@ -122,8 +134,13 @@
     "menus": {
       "view/title": [
         {
-          "command": "hit.toggleFolderHierarchy",
-          "when": "view == hitSourceControl",
+          "command": "hit.toggleFolderHierarchy.tree",
+          "when": "view == hitSourceControl && hit:folderHierarchy == true",
+          "group": "navigation"
+        },
+        {
+          "command": "hit.toggleFolderHierarchy.list",
+          "when": "view == hitSourceControl && hit:folderHierarchy == false",
           "group": "navigation"
         },
         {
@@ -138,7 +155,7 @@
         },
         {
           "command": "hit.push",
-          "when": "view == hitSourceControl",
+          "when": "view == hitSourceControl && hit:canPush",
           "group": "navigation@1"
         },
         {

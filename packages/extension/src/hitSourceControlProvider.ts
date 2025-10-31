@@ -65,13 +65,20 @@ export class HitSourceControlProvider
   private workspaceRoot: string
   private commitMessage: string = ''
   private currentRepository: string | null = null
-  private folderHierarchySwitch: boolean = true
+  private folderHierarchySwitch: boolean = false
+  private canPush: boolean = false
+  private pushAheadCount: number = 0
 
   constructor() {
     this.workspaceRoot =
       vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
 
     this.setupFileChangeListener()
+    vscode.commands.executeCommand(
+      'setContext',
+      'hit:folderHierarchy',
+      this.folderHierarchySwitch,
+    )
   }
 
   private setupFileChangeListener(): void {
@@ -166,6 +173,7 @@ export class HitSourceControlProvider
         branch,
         true,
       )
+      await this.updateCanPushContext()
     }
   }
 
@@ -231,8 +239,8 @@ export class HitSourceControlProvider
       name,
       path: repoPath,
       branch,
-      hasUncommittedChanges: true,
-      hasStagedChanges: true,
+      hasUncommittedChanges: uncommittedFileStatuses.size > 0,
+      hasStagedChanges: stagedFileStatuses.size > 0,
       isMain,
       stagedFileStatuses,
       uncommittedFileStatuses,
@@ -285,7 +293,7 @@ export class HitSourceControlProvider
 
     rootItems.push(
       new HitTreeItem(
-        '📝 Input Area',
+        'Commit Message',
         vscode.TreeItemCollapsibleState.None,
         {
           command: 'hit.showCommitMessageInput',
@@ -303,47 +311,53 @@ export class HitSourceControlProvider
       ),
     )
 
-    // Commit button
-    rootItems.push(
-      new HitTreeItem(
-        'Commit',
-        vscode.TreeItemCollapsibleState.None,
-        {
-          command: 'hit.commit',
-          title: 'Commit Changes',
-          arguments: [],
-        },
-        new vscode.ThemeIcon('check'),
-        'commit-button',
-        undefined,
-        'Commit staged changes',
-        undefined,
-        undefined,
-        undefined,
-        mainRepo.name,
-      ),
-    )
-
-    // Push button
-    rootItems.push(
-      new HitTreeItem(
-        'Push',
-        vscode.TreeItemCollapsibleState.None,
-        {
-          command: 'hit.push',
-          title: 'Push',
-          arguments: [],
-        },
-        new vscode.ThemeIcon('cloud-upload'),
-        'push-button',
-        undefined,
-        'Push current branch',
-        undefined,
-        undefined,
-        undefined,
-        mainRepo.name,
-      ),
-    )
+    if (
+      this.canPush &&
+      !(
+        mainRepo.stagedFileStatuses.size > 0 ||
+        mainRepo.uncommittedFileStatuses.size > 0
+      )
+    ) {
+      rootItems.push(
+        new HitTreeItem(
+          `Push (${this.pushAheadCount})`,
+          vscode.TreeItemCollapsibleState.None,
+          {
+            command: 'hit.push',
+            title: 'Push',
+            arguments: [],
+          },
+          new vscode.ThemeIcon('cloud-upload'),
+          'push-button',
+          undefined,
+          `Push ${mainRepo.branch}`,
+          undefined,
+          undefined,
+          undefined,
+          mainRepo.name,
+        ),
+      )
+    } else {
+      rootItems.push(
+        new HitTreeItem(
+          'Commit',
+          vscode.TreeItemCollapsibleState.None,
+          {
+            command: 'hit.commit',
+            title: 'Commit Changes',
+            arguments: [],
+          },
+          new vscode.ThemeIcon('check'),
+          'commit-button',
+          undefined,
+          `Commit ${mainRepo.branch}`,
+          undefined,
+          undefined,
+          undefined,
+          mainRepo.name,
+        ),
+      )
+    }
 
     // Staged Changes section
     rootItems.push(
@@ -700,6 +714,16 @@ export class HitSourceControlProvider
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
+        title: `Staging changes...`,
+      },
+      async () => {
+        await cmdRunExec(`hit add .`, repo.path)
+      },
+    )
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
         title: `Committing to ${repo.branch}...`,
       },
       async () => {
@@ -749,37 +773,6 @@ export class HitSourceControlProvider
     if (this.currentRepository) {
       this.checkoutRepositoryBranch(branch)
       this._onDidChangeTreeData.fire()
-    }
-  }
-
-  async commitStaged(): Promise<void> {
-    if (this.currentRepository) {
-      const message = await vscode.window.showInputBox({
-        prompt: 'Commit message',
-        placeHolder: `Message (⌘⏎ to commit on "${this.getCurrentBranch()}")`,
-      })
-      if (message) {
-        vscode.window.showInformationMessage(
-          `Committed staged changes: ${message}`,
-        )
-        this._onDidChangeTreeData.fire()
-      }
-    }
-  }
-
-  async commitAll(): Promise<void> {
-    if (this.currentRepository) {
-      const message = await vscode.window.showInputBox({
-        prompt: 'Commit all changes',
-        placeHolder: `Message (⌘⏎ to commit on "${this.getCurrentBranch()}")`,
-      })
-      if (message) {
-        // TODO: Implementcommit functionality
-        vscode.window.showInformationMessage(
-          `Committed all changes: ${message}`,
-        )
-        this._onDidChangeTreeData.fire()
-      }
     }
   }
 
@@ -914,6 +907,7 @@ export class HitSourceControlProvider
   async refresh(): Promise<void> {
     try {
       await this.initializeRepository()
+      await this.updateCanPushContext()
       this._onDidChangeTreeData.fire()
     } catch (error) {
       Log.error('Error refreshing repository:', error)
@@ -923,11 +917,65 @@ export class HitSourceControlProvider
 
   toggleFolderHierarchy(): void {
     this.folderHierarchySwitch = !this.folderHierarchySwitch
+    vscode.commands.executeCommand(
+      'setContext',
+      'hit:folderHierarchy',
+      this.folderHierarchySwitch,
+    )
     this._onDidChangeTreeData.fire()
   }
 
   getFolderHierarchyMode(): boolean {
     return this.folderHierarchySwitch
+  }
+
+  private async updateCanPushContext(): Promise<void> {
+    try {
+      const repo = this.getRepository()
+      if (!repo) {
+        await vscode.commands.executeCommand('setContext', 'hit:canPush', false)
+        await vscode.commands.executeCommand(
+          'setContext',
+          'hit:pushAheadCount',
+          0,
+        )
+        return
+      }
+      const res = await cmdRun<CommandInput, CommandOutput>({
+        command: 'push-status',
+        workspaceDir: repo.path,
+      })
+      Log.log('Push status:', res)
+      if (res.success && res.data) {
+        const data = res.data as any
+        this.canPush = !!data.needPush
+        this.pushAheadCount = data.aheadCount || 0
+        await vscode.commands.executeCommand(
+          'setContext',
+          'hit:canPush',
+          !!data.needPush,
+        )
+        await vscode.commands.executeCommand(
+          'setContext',
+          'hit:pushAheadCount',
+          data.aheadCount || 0,
+        )
+      } else {
+        await vscode.commands.executeCommand('setContext', 'hit:canPush', false)
+        await vscode.commands.executeCommand(
+          'setContext',
+          'hit:pushAheadCount',
+          0,
+        )
+      }
+    } catch (e) {
+      await vscode.commands.executeCommand('setContext', 'hit:canPush', false)
+      await vscode.commands.executeCommand(
+        'setContext',
+        'hit:pushAheadCount',
+        0,
+      )
+    }
   }
 
   private stageFolder(item: HitTreeItem): void {
@@ -1169,6 +1217,10 @@ export class HitSourceControlProvider
         }
       },
     )
+  }
+
+  getPushAheadCount(): string {
+    return this.pushAheadCount > 0 ? ` (${this.pushAheadCount})` : ''
   }
 
   async fetch(): Promise<void> {

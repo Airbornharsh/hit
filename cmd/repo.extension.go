@@ -79,6 +79,8 @@ var repoExtensionCmd = &cobra.Command{
 			output = extension.HandleGraphLogCommand()
 		case "commit-files":
 			output = extension.HandleCommitFilesCommand(commandParts[1:])
+		case "push-status":
+			output = extension.HandlePushStatusCommand()
 		default:
 			output = go_types.Output{
 				Success: false,
