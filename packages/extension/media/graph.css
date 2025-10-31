@@ -1,0 +1,267 @@
+:root {
+  --desc-col: 1fr;
+  --date-col: 180px;
+  --author-col: 160px;
+  --hash-col: 100px;
+  --row-h: 28px;
+}
+body {
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font: 12.5px/1.5 var(--vscode-editor-font-family);
+}
+.container {
+  position: relative;
+}
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 12px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vscode-toolbar-hoverOutline);
+  background: var(--vscode-editor-background);
+}
+.h-col {
+  font-weight: 600;
+  opacity: 0.9;
+}
+.rows {
+  position: absolute;
+  right: 0px;
+  padding-right: 6px;
+}
+.row {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  cursor: pointer;
+  align-items: center;
+  height: var(--row-h);
+}
+.row:hover {
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 8%,
+    transparent
+  );
+}
+.row .message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding-left: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .date,
+.row .author,
+.row .hash {
+  flex: 0 0 100px;
+  width: 100px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .date {
+  width: 180px;
+  min-width: 180px;
+}
+.hash {
+  color: var(--vscode-textLink-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.parent-btn {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: underline;
+}
+.ref {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-left: 6px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 11px;
+}
+.meta {
+  opacity: 0.7;
+}
+svg {
+  display: block;
+}
+g.node {
+  cursor: pointer;
+}
+g.node:hover .commit-node {
+  filter: brightness(1.3);
+  stroke-width: 2;
+}
+.pill-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+.ref-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.ref-pill.head {
+  outline: 1px solid var(--vscode-textLink-foreground);
+}
+.details {
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border);
+  padding: 8px 10px;
+  z-index: 10;
+  width: calc(100% - 20px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.details-info {
+  min-width: 0;
+}
+.details-files {
+  min-width: 0;
+}
+.det-row {
+  margin: 4px 0;
+}
+.det-label {
+  display: inline-block;
+  width: 80px;
+  opacity: 0.8;
+}
+.loading {
+  opacity: 0.7;
+  font-style: italic;
+}
+.files-list {
+  margin-top: 8px;
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.file-item:hover {
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 5%,
+    transparent
+  );
+}
+.file-status {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 8px;
+  font-size: 10px;
+  text-align: center;
+  line-height: 12px;
+  font-weight: bold;
+}
+.file-status.added {
+  background: var(--vscode-gitDecoration-addedResourceForeground);
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.file-status.modified {
+  background: var(--vscode-gitDecoration-modifiedResourceForeground);
+  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+.file-status.deleted {
+  background: var(--vscode-gitDecoration-deletedResourceForeground);
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+.file-path {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+/* Tree */
+.tree {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.tree ul {
+  list-style: none;
+  padding-left: 16px;
+  margin: 0;
+}
+.tree .node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.tree .node.folder {
+  cursor: pointer;
+}
+.tree .caret {
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 6px solid var(--vscode-editor-foreground);
+  transition: transform 0.1s ease;
+}
+.tree .expanded > .node .caret {
+  transform: rotate(90deg);
+}
+.tree .children {
+  margin-left: 12px;
+}
+.tree .file {
+  cursor: pointer;
+  border-radius: 3px;
+}
+.tree .file:hover {
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 5%,
+    transparent
+  );
+}
+.link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+.link:hover {
+  text-decoration: underline;
+}
+button {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+button:hover {
+  filter: brightness(1.1);
+}
+.branch-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+}

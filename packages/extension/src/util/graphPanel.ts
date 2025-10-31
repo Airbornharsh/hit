@@ -8,6 +8,7 @@ export class GraphPanel {
   private readonly panel: vscode.WebviewPanel
   private readonly disposables: vscode.Disposable[] = []
   private readonly workspaceDir: string
+  private readonly context: vscode.ExtensionContext
 
   static show(context: vscode.ExtensionContext, title: string, data: any) {
     if (GraphPanel.current) {
@@ -30,6 +31,7 @@ export class GraphPanel {
     data: any,
   ) {
     this.panel = panel
+    this.context = context
     this.workspaceDir =
       vscode.workspace.workspaceFolders &&
       vscode.workspace.workspaceFolders.length > 0
@@ -343,6 +345,12 @@ export class GraphPanel {
 
     const edges = mainParentLines + mergeLines
 
+    const height = topPad + layout.length * rowH + 40
+    const lanesWidth = Math.max(1, nextLane) * colW
+    const width = leftPad + Math.max(8, nextLane + 2) * colW
+    const rowsLeft = leftPad + lanesWidth + 16
+    const headerH = 32
+
     const list = layout
       .map((n: any) => {
         const y = topPad + n.y * rowH - 14
@@ -350,93 +358,48 @@ export class GraphPanel {
         return `
         <div class="row" onclick="toggleDetails('${n.hash}')" style="top:${y}px;">
           <span class="message">${msg || '(no message)'}</span>
-          <span class="date">${n.date || ''}</span>
+          <span class="date">${new Date(n.date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) || ''}</span>
           <span class="author">${n.author || ''}</span>
           <span class="hash">${n.hash.slice(0, 7)}</span>
         </div>
-        <div class="details" id="det-${n.hash}" style="display: none; top:${y + rowH}px;">
-          <div class="det-row"><span class="det-label">Commit</span><code>${n.hash}</code></div>
-          ${n.author ? `<div class="det-row"><span class="det-label">Author</span><span>${n.author}</span></div>` : ''}
-          ${n.date ? `<div class="det-row"><span class="det-label">Date</span><span>${n.date}</span></div>` : ''}
-          ${Array.isArray(n.parents) && n.parents.length > 0 ? `<div class="det-row"><span class="det-label">Parents</span>${n.parents.map((p: string) => `<a href="#" class="link parent" onclick="event.stopPropagation(); scrollToParent('${p}')">${p.slice(0, 7)}</a>`).join(' ')}</div>` : ''}
-          ${Array.isArray(n.refs) && n.refs.length > 0 ? `<div class="det-row"><span class="det-label">Refs</span>${n.refs.map((r: string) => `<span class="ref">${r}</span>`).join(' ')}</div>` : ''}
-          <div class="det-row"><span class="det-label">Files</span><span id="files-loading-${n.hash}" class="loading">Loading files...</span><div id="files-list-${n.hash}" class="files-list" style="display: none;"></div></div>
-          <div class="det-row"><button onclick="event.stopPropagation(); closeDetails('${n.hash}')">Close</button></div>
+        <div class="details" id="det-${n.hash}" style="display: none; top:${y + rowH}px; left:${rowsLeft}px;">
+          <div class="details-info">
+            <div class="det-row"><span class="det-label">Commit</span><code>${n.hash}</code></div>
+            ${n.author ? `<div class="det-row"><span class="det-label">Author</span><span>${n.author}</span></div>` : ''}
+            ${n.date ? `<div class="det-row"><span class="det-label">Date</span><span>${n.date}</span></div>` : ''}
+            ${Array.isArray(n.parents) && n.parents.length > 0 ? `<div class="det-row"><span  class="det-label">Parents</span>${n.parents.map((p: string) => `<button class="link parent parent-btn" onclick="toggleDetails('${p}'); scrollToParent('${p}')">${p.slice(0, 7)}</button>`).join(' ')}</div>` : ''}
+            ${Array.isArray(n.refs) && n.refs.length > 0 ? `<div class="det-row"><span class="det-label">Refs</span>${n.refs.map((r: string) => `<span class="ref">${r}</span>`).join(' ')}</div>` : ''}
+          </div>
+          <div class="details-files">
+            <div class="det-row"><span class="det-label">Files</span><span id="files-loading-${n.hash}" class="loading">Loading files...</span><div id="files-list-${n.hash}" class="files-list" style="display: none;"></div></div>
+          </div>
         </div>`
       })
       .join('')
 
-    const height = topPad + layout.length * rowH + 40
-    const lanesWidth = Math.max(1, nextLane) * colW
-    const width = leftPad + Math.max(8, nextLane + 2) * colW
-
-    const rowsLeft = leftPad + lanesWidth + 16
-    const headerH = 32
+    const webview = this.panel.webview
+    const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media')
+    const cssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(mediaRoot, 'graph.css'),
+    )
+    const jsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(mediaRoot, 'graph.js'),
+    )
+    const csp = `default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource};`
 
     return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
-  <style>
-    :root {
-      --desc-col: 1fr;
-      --date-col: 180px;
-      --author-col: 160px;
-      --hash-col: 100px;
-      --row-h: ${rowH}px;
-    }
-    body { color: var(--vscode-foreground); background: var(--vscode-editor-background); font: 12.5px/1.5 var(--vscode-editor-font-family); }
-    .container { position: relative; }
-    .header { position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; padding: 6px 8px; border-bottom: 1px solid var(--vscode-toolbar-hoverOutline); background: var(--vscode-editor-background); }
-    .h-col { font-weight: 600; opacity: 0.9; }
-    .rows { position:absolute; left:${rowsLeft}px; top:${headerH}px; right:12px; padding-right:6px; }
-    .row { position:absolute; display:flex; gap: 12px; cursor:pointer; align-items: center; height: var(--row-h); }
-    .row:hover { background: color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent); }
-    .row .message { display:flex; align-items:center; gap:8px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .row .date, .row .author, .row .hash { flex: 0 0 100px; width: 100px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .hash { color: var(--vscode-textLink-foreground); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .ref { display:inline-block; padding:1px 6px; margin-left:6px; border-radius:10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size: 11px; }
-    .meta { opacity: 0.7; }
-    svg { display:block; }
-    g.node { cursor: pointer; }
-    g.node:hover .commit-node { filter: brightness(1.3); stroke-width: 2; }
-    .pill-row { display:flex; gap:6px; align-items:center; justify-content:center; }
-    .ref-pill { display:inline-block; padding:1px 6px; border-radius:10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); font-size:10px; line-height:14px; white-space:nowrap; }
-    .ref-pill.head { outline: 1px solid var(--vscode-textLink-foreground); }
-    .details { position: absolute; left: ${rowsLeft}px; right: 12px; background: var(--vscode-editorWidget-background); border:1px solid var(--vscode-editorWidget-border); border-radius:6px; padding:8px 10px; max-width: 900px; z-index: 10; }
-    .det-row { margin: 4px 0; }
-    .det-label { display:inline-block; width:80px; opacity:0.8; }
-    .loading { opacity: 0.7; font-style: italic; }
-    .files-list { margin-top: 8px; }
-    .file-item { display: flex; align-items: center; padding: 2px 0; cursor: pointer; border-radius: 3px; }
-    .file-item:hover { background: color-mix(in srgb, var(--vscode-editor-foreground) 5%, transparent); }
-    .file-status { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 8px; font-size: 10px; text-align: center; line-height: 12px; font-weight: bold; }
-    .file-status.added { background: var(--vscode-gitDecoration-addedResourceForeground); color: var(--vscode-gitDecoration-addedResourceForeground); }
-    .file-status.modified { background: var(--vscode-gitDecoration-modifiedResourceForeground); color: var(--vscode-gitDecoration-modifiedResourceForeground); }
-    .file-status.deleted { background: var(--vscode-gitDecoration-deletedResourceForeground); color: var(--vscode-gitDecoration-deletedResourceForeground); }
-    .file-path { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-    /* Tree */
-    .tree { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-    .tree ul { list-style: none; padding-left: 16px; margin: 0; }
-    .tree .node { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
-    .tree .node.folder { cursor: pointer; }
-    .tree .caret { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid var(--vscode-editor-foreground); transition: transform 0.1s ease; }
-    .tree .expanded > .node .caret { transform: rotate(90deg); }
-    .tree .children { margin-left: 12px; }
-    .tree .file { cursor: pointer; border-radius: 3px; }
-    .tree .file:hover { background: color-mix(in srgb, var(--vscode-editor-foreground) 5%, transparent); }
-    .link { color: var(--vscode-textLink-foreground); text-decoration: none; }
-    .link:hover { text-decoration: underline; }
-    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius:4px; padding:3px 8px; cursor:pointer; }
-    button:hover { filter: brightness(1.1); }
-    .branch-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; }
-  </style>
+  <meta http-equiv="Content-Security-Policy" content="${csp}">
+  <link rel="stylesheet" href="${cssUri}">
+  
   </head>
   <body>
     <div class="container">
       <div class="header">
         <span class="h-col" style="flex: 1;">Description</span>
-        <span class="h-col" style="width: 100px;">Date</span>
+        <span class="h-col" style="width: 180px;">Date</span>
         <span class="h-col" style="width: 100px;">Author</span>
         <span class="h-col" style="width: 100px;">Commit</span>
       </div>
@@ -444,192 +407,11 @@ export class GraphPanel {
         ${edges}
         ${circles}
       </svg>
-      <div class="rows">
+      <div class="rows" style="left:${rowsLeft}px; top:${headerH}px;">
         ${list}
       </div>
     </div>
-    <script>
-      const vscode = acquireVsCodeApi();
-      console.log('Graph panel script loaded')
-      
-      function toggleDetailsByHash(hash) {
-        console.log('toggleDetailsByHash called with hash:', hash)
-        if (!hash) {
-          console.log('No hash provided')
-          return
-        }
-        
-        // Close all other details first
-        const allDetails = document.querySelectorAll('.details')
-        allDetails.forEach(detail => {
-          if (detail.id !== 'det-' + hash) {
-            detail.style.display = 'none'
-            detail.hidden = true
-          }
-        })
-        
-        // Find the details element for this commit
-        const det = document.getElementById('det-'+hash)
-        console.log('Found details element:', det)
-        
-        if (det) {
-          // Check current display state
-          const isCurrentlyHidden = det.style.display === 'none' || det.hidden
-          console.log('Current state - isHidden:', isCurrentlyHidden)
-          
-          if (isCurrentlyHidden) {
-            // Show the details
-            det.style.display = 'block'
-            det.hidden = false
-            console.log('Showing details for:', hash)
-            
-            // Load files if not already loaded
-            if (!det.dataset.filesLoaded) {
-              console.log('Loading commit files for:', hash)
-              loadCommitFiles(hash)
-            }
-          } else {
-            // Hide the details
-            det.style.display = 'none'
-            det.hidden = true
-            console.log('Hiding details for:', hash)
-          }
-        } else {
-          console.log('Details element not found for hash:', hash)
-        }
-      }
-      
-      async function loadCommitFiles(hash) {
-        const loadingEl = document.getElementById('files-loading-'+hash)
-        const filesEl = document.getElementById('files-list-'+hash)
-        const detEl = document.getElementById('det-'+hash)
-        
-        if (!loadingEl || !filesEl || !detEl) return
-        
-        try {
-          // Call the extension command to get commit files
-          const result = await vscode.postMessage({
-            command: 'getCommitFiles',
-            commitHash: hash
-          })
-          
-          // This will be handled by the extension
-        } catch (error) {
-          loadingEl.textContent = 'Error loading files'
-          console.error('Error loading commit files:', error)
-        }
-      }
-      
-      function renderFilesList(hash, files) {
-        const loadingEl = document.getElementById('files-loading-'+hash)
-        const filesEl = document.getElementById('files-list-'+hash)
-        const detEl = document.getElementById('det-'+hash)
-        
-        if (!loadingEl || !filesEl || !detEl) return
-        
-        loadingEl.style.display = 'none'
-        filesEl.style.display = 'block'
-        detEl.dataset.filesLoaded = 'true'
-        
-        if (!files || files.length === 0) {
-          filesEl.innerHTML = '<div style="opacity: 0.7; font-style: italic;">No files changed</div>'
-          return
-        }
-        
-        // Build a tree from the file paths
-        const root = { name: '', folders: new Map(), files: [] }
-        for (const f of files) {
-          const parts = String(f.path || '').split('/').filter(Boolean)
-          let node = root
-          for (let i = 0; i < parts.length; i++) {
-            const part = parts[i]
-            const isLast = i === parts.length - 1
-            if (isLast) {
-              node.files.push({ name: part, fullPath: f.path, status: f.status })
-            } else {
-              if (!node.folders.has(part)) node.folders.set(part, { name: part, folders: new Map(), files: [] })
-              node = node.folders.get(part)
-            }
-          }
-        }
-        
-        const sym = (s) => s === 'added' ? '+' : s === 'deleted' ? '-' : '~'
-        
-        function renderFolder(folder) {
-          let html = ''
-          if (folder.name) {
-            html += '<div class="node folder"><span class="caret"></span><span>' + folder.name + '</span></div>'
-          }
-          html += '<ul class="children">'
-          // Folders first
-          folder.folders.forEach((child) => {
-            html += '<li class="expanded">' + renderFolder(child) + '</li>'
-          })
-          // Files
-          folder.files.forEach((file) => {
-            const st = file.status || 'modified'
-            html += '<li class="file" data-file-path="' + file.fullPath + '" data-commit-hash="' + hash + '">' +
-                    '<div class="node file">' +
-                    '<span class="file-status ' + st + '">' + sym(st) + '</span>' +
-                    '<span class="file-path">' + file.name + '</span>' +
-                    '</div></li>'
-          })
-          html += '</ul>'
-          return html
-        }
-
-        filesEl.innerHTML = '<div class="tree">' + renderFolder(root) + '</div>'
-
-// File click
-filesEl.querySelectorAll('li.file').forEach(li => {
-  li.addEventListener('click', (e) => {
-    const el = e.currentTarget
-    const filePath = el.getAttribute('data-file-path')
-    const commitHash = el.getAttribute('data-commit-hash')
-    openFileDiff(filePath, commitHash)
-  })
-})
-      }
-
-function openFileDiff(filePath, commitHash) {
-  // Send message to extension to open diff
-  vscode.postMessage({
-    command: 'openFileDiff',
-    filePath: filePath,
-    commitHash: commitHash
-  })
-}
-
-// Listen for messages from the extension
-window.addEventListener('message', event => {
-  const message = event.data
-  switch (message.command) {
-    case 'renderFiles':
-      renderFilesList(message.commitHash, message.files)
-      break
-  }
-})
-// Simple global functions for onclick handlers
-window.toggleDetails = function (hash) {
-  toggleDetailsByHash(hash)
-}
-
-window.closeDetails = function (hash) {
-  const det = document.getElementById('det-' + hash)
-  if (det) {
-    det.style.display = 'none'
-    det.hidden = true
-  }
-}
-
-// Handle parent links with simple onclick
-window.scrollToParent = function (hash) {
-  const targetRow = document.querySelector('.row[onclick*="' + hash + '"]')
-  if (targetRow) {
-    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-}
-  </script>
+    <script src="${jsUri}"></script>
   </body>
   </html>`
   }
