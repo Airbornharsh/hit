@@ -73,6 +73,197 @@ func MergeBranch(currentBranch string, targetBranch string, remoteName string) e
 	return nil
 }
 
+func MergeCommitHash(currentBranch string, targetCommit string) error {
+	currentHeadCommit, err := getLocalBranchCommit(currentBranch)
+	if err != nil {
+		return fmt.Errorf("failed to get current branch commit: %v", err)
+	}
+
+	targetBranch, err := findLocalBranchContainingCommit(targetCommit)
+	if err != nil {
+		return fmt.Errorf("failed to locate commit in local branches: %v", err)
+	}
+
+	commonAncestor, err := findCommonAncestorLocal(currentBranch, targetBranch, currentHeadCommit, targetCommit)
+	if err != nil {
+		return fmt.Errorf("failed to find common ancestor: %v", err)
+	}
+
+	if isFastForwardPossible(currentHeadCommit, commonAncestor) {
+		if err := performFastForwardLocal(currentBranch, targetBranch, targetCommit); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if _, err := detectThreeWayConflicts(currentHeadCommit, targetCommit, commonAncestor); err != nil {
+		return fmt.Errorf("failed to detect three-way conflicts: %v", err)
+	}
+
+	if err := performThreeWayMergeLocal(currentHeadCommit, targetCommit, currentBranch, targetBranch, commonAncestor); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func findLocalBranchContainingCommit(commitHash string) (string, error) {
+	headsDir := filepath.Join(".hit", "refs", "heads")
+	entries, err := os.ReadDir(headsDir)
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		commits, err := storage.GetHeadCommits(name)
+		if err != nil {
+			continue
+		}
+		for _, c := range commits {
+			if c.Hash == commitHash {
+				return name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("commit %s not found in local branches", commitHash)
+}
+
+func findCommonAncestorLocal(currentBranch, targetBranch, currentCommit, targetCommit string) (string, error) {
+	ancestors1, err := getAllAncestors("", currentBranch, currentCommit, "heads")
+	if err != nil {
+		return "", err
+	}
+	ancestors2, err := getAllAncestors("", targetBranch, targetCommit, "heads")
+	if err != nil {
+		return "", err
+	}
+	for _, a := range ancestors1 {
+		if slices.Contains(ancestors2, a) {
+			return a, nil
+		}
+	}
+	return "", fmt.Errorf("no common ancestor found")
+}
+
+func performFastForwardLocal(currentBranch, targetBranch, targetCommit string) error {
+	refPath := filepath.Join(".hit", "refs", "heads", currentBranch)
+	if err := os.WriteFile(refPath, []byte(targetCommit), 0644); err != nil {
+		return fmt.Errorf("failed to update branch reference: %v", err)
+	}
+	if err := storage.UpdateWorkingDirectoryAndIndexFromCommit(targetCommit); err != nil {
+		return fmt.Errorf("failed to update working directory and index: %v", err)
+	}
+	if err := updateLocalLogWithBranchCommits(currentBranch, targetBranch); err != nil {
+		return fmt.Errorf("failed to update local log: %v", err)
+	}
+	return nil
+}
+
+func updateLocalLogWithBranchCommits(currentBranch, targetBranch string) error {
+	targetCommits, err := storage.GetHeadCommits(targetBranch)
+	if err != nil {
+		return fmt.Errorf("failed to get target branch commits: %v", err)
+	}
+	localCommits, err := storage.GetHeadCommits(currentBranch)
+	if err != nil {
+		localCommits = []go_types.Commit{}
+	}
+	exists := make(map[string]bool)
+	for _, c := range localCommits {
+		exists[c.Hash] = true
+	}
+	all := append([]go_types.Commit{}, localCommits...)
+	for _, c := range targetCommits {
+		if !exists[c.Hash] {
+			all = append(all, c)
+		}
+	}
+	slices.SortFunc(all, func(a, b go_types.Commit) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return -1
+		} else if a.Timestamp.After(b.Timestamp) {
+			return 1
+		}
+		return 0
+	})
+	return storage.UpdateHeadCommits(currentBranch, all)
+}
+
+func performThreeWayMergeLocal(currentCommit, targetCommit, currentBranch, targetBranch, commonAncestor string) error {
+	mergedTree, hasConflicts, err := performThreeWayFileMerge("origin", targetBranch, currentCommit, targetCommit, commonAncestor)
+	if err != nil {
+		return fmt.Errorf("failed to perform three-way file merge: %v", err)
+	}
+	if hasConflicts {
+		return nil
+	}
+	mergeCommit, err := createMergeCommitWithTree(currentCommit, targetCommit, currentBranch, targetBranch, mergedTree)
+	if err != nil {
+		return fmt.Errorf("failed to create merge commit: %v", err)
+	}
+	if err := UpdateLocalLogFromBranch(currentBranch, targetBranch, mergeCommit, commonAncestor); err != nil {
+		return fmt.Errorf("failed to update local log: %v", err)
+	}
+	refPath := filepath.Join(".hit", "refs", "heads", currentBranch)
+	if err := os.WriteFile(refPath, []byte(mergeCommit.Hash), 0644); err != nil {
+		return fmt.Errorf("failed to update branch reference: %v", err)
+	}
+	if err := storage.UpdateWorkingDirectoryAndIndexFromCommit(mergeCommit.Hash); err != nil {
+		return fmt.Errorf("failed to update working directory: %v", err)
+	}
+	_ = mergedTree
+	return nil
+}
+
+func UpdateLocalLogFromBranch(currentBranch, targetBranch string, commit *go_types.Commit, commonAncestor string) error {
+	logPath := filepath.Join(".hit", "logs", "refs", "heads", currentBranch)
+	var commits []go_types.Commit
+	if data, err := os.ReadFile(logPath); err == nil {
+		_ = json.Unmarshal(data, &commits)
+	}
+	targetCommits, err := storage.GetHeadCommits(targetBranch)
+	if err != nil {
+		targetCommits = []go_types.Commit{}
+	}
+	commonIdx := -1
+	for i, c := range targetCommits {
+		if c.Hash == commonAncestor {
+			commonIdx = i
+			break
+		}
+	}
+	newCommits := []go_types.Commit{}
+	if commonIdx >= 0 && commonIdx+1 < len(targetCommits) {
+		newCommits = targetCommits[commonIdx+1:]
+	}
+	commits = append(commits, *commit)
+	exists := make(map[string]bool)
+	for _, c := range commits {
+		exists[c.Hash] = true
+	}
+	for _, c := range newCommits {
+		if !exists[c.Hash] {
+			commits = append(commits, c)
+		}
+	}
+	slices.SortFunc(commits, func(a, b go_types.Commit) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return -1
+		} else if a.Timestamp.After(b.Timestamp) {
+			return 1
+		}
+		return 0
+	})
+	data, err := json.Marshal(commits)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(logPath, data, 0644)
+}
+
 func getLocalBranchCommit(branchName string) (string, error) {
 	refPath := filepath.Join(".hit", "refs", "heads", branchName)
 	data, err := os.ReadFile(refPath)
@@ -278,9 +469,8 @@ func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit, comm
 	if err != nil {
 		commits = []go_types.Commit{}
 	} else {
-		err = json.Unmarshal(logData, &commits)
-		if err != nil {
-			return fmt.Errorf("failed to parse existing log: %v", err)
+		if uErr := json.Unmarshal(logData, &commits); uErr != nil {
+			commits = []go_types.Commit{}
 		}
 	}
 
@@ -289,9 +479,8 @@ func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit, comm
 	if err != nil {
 		remoteCommits = []go_types.Commit{}
 	} else {
-		err = json.Unmarshal(logRemoteData, &remoteCommits)
-		if err != nil {
-			return fmt.Errorf("failed to parse existing log: %v", err)
+		if uErr := json.Unmarshal(logRemoteData, &remoteCommits); uErr != nil {
+			remoteCommits = []go_types.Commit{}
 		}
 	}
 
@@ -302,7 +491,10 @@ func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit, comm
 			break
 		}
 	}
-	newCommits := remoteCommits[commonAncestorIndex:]
+	newCommits := []go_types.Commit{}
+	if commonAncestorIndex >= 0 && commonAncestorIndex+1 < len(remoteCommits) {
+		newCommits = remoteCommits[commonAncestorIndex+1:]
+	}
 
 	commits = append(commits, *commit)
 
@@ -337,6 +529,13 @@ func UpdateLocalLog(remoteName, branchName string, commit *go_types.Commit, comm
 	updatedLogData, err := json.Marshal(commits)
 	if err != nil {
 		return fmt.Errorf("failed to marshal updated log: %v", err)
+	}
+
+	if mkErr := os.MkdirAll(filepath.Dir(logPath), 0755); mkErr != nil {
+		return fmt.Errorf("failed to ensure log directory: %v", mkErr)
+	}
+	if mkErr := os.MkdirAll(filepath.Dir(logRemotePath), 0755); mkErr != nil {
+		return fmt.Errorf("failed to ensure remote log directory: %v", mkErr)
 	}
 
 	err = os.WriteFile(logPath, updatedLogData, 0644)
@@ -454,6 +653,10 @@ func performThreeWayFileMerge(remoteName, targetBranch, currentCommit, targetCom
 		mergedHash, mergedContent, err := mergeFileThreeWay(currentHash, targetHash)
 		if err != nil {
 			return nil, false, err
+		}
+
+		if mergedHash == "" {
+			continue
 		}
 
 		if HasConflictMarkers(mergedContent) {

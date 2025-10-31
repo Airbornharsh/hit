@@ -218,25 +218,18 @@ func GetCommitObject(branchName, commitHash string) (*go_types.Commit, error) {
 		}, nil
 	}
 
-	var commits []go_types.Commit
-	logPath := filepath.Join(".hit", "logs", "refs", "heads", branchName)
-	data, err := os.ReadFile(logPath)
+	commitData, err := LoadObject(commitHash)
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal(data, &commits)
+	var commit go_types.Commit
+	err = json.Unmarshal([]byte(commitData), &commit)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, commit := range commits {
-		if commit.Hash == commitHash {
-			return &commit, nil
-		}
-	}
-
-	return nil, fmt.Errorf("commit not found: %s", commitHash)
+	return &commit, nil
 }
 
 func GetRemoteCommitObject(remoteName, branchName, commitHash string) (*go_types.Commit, error) {

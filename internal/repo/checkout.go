@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/airbornharsh/hit/internal/go_types"
@@ -55,6 +56,143 @@ func CreateBranch(branch string) error {
 	}
 
 	return nil
+}
+
+func CreateBranchAt(branch string, commitHash string) error {
+	if _, err := os.Stat(filepath.Join(".hit", "refs", "heads", branch)); err == nil {
+		return fmt.Errorf("branch '%s' already exists", branch)
+	}
+
+	if commitHash == "" {
+		return fmt.Errorf("commit hash is required")
+	}
+
+	treeData, err := storage.LoadObject(commitHash)
+	if err != nil {
+		return fmt.Errorf("failed to load tree object for %s: %v", commitHash, err)
+	}
+	fmt.Println("treeData", treeData)
+	var tree go_types.Tree
+	if err := json.Unmarshal([]byte(treeData), &tree); err != nil {
+		return fmt.Errorf("failed to parse tree object for %s: %v", commitHash, err)
+	}
+	copyLogsForNewBranch(branch, commitHash)
+
+	newBranchRefPath := filepath.Join(".hit", "refs", "heads", branch)
+	if err := os.WriteFile(newBranchRefPath, []byte(commitHash), 0644); err != nil {
+		return fmt.Errorf("failed to create branch ref: %v", err)
+	}
+	headPath := filepath.Join(".hit", "HEAD")
+	newHead := fmt.Sprintf("ref: refs/heads/%s", branch)
+	if err := os.WriteFile(headPath, []byte(newHead), 0644); err != nil {
+		return fmt.Errorf("failed to update HEAD: %v", err)
+	}
+
+	if err := storage.UpdateWorkingDirectoryAndIndexFromCommit(commitHash); err != nil {
+		return fmt.Errorf("failed to update working directory and index: %v", err)
+	}
+
+	return nil
+}
+
+func copyLogsForNewBranch(newBranch string, commitHash string) {
+	currentBranch, err := storage.GetBranch()
+	if err != nil {
+		return
+	}
+	copyFromBranch := func(srcBranch string) bool {
+		srcPath := filepath.Join(".hit", "logs", "refs", "heads", srcBranch)
+		data, err := os.ReadFile(srcPath)
+		if err != nil || len(data) == 0 {
+			return false
+		}
+		var srcCommits []go_types.Commit
+		if err := json.Unmarshal(data, &srcCommits); err != nil {
+			return false
+		}
+
+		commitContains := false
+		commitIndex := -1
+		for i, commit := range srcCommits {
+			if commit.Hash == commitHash {
+				commitContains = true
+				commitIndex = i
+				break
+			}
+		}
+
+		if !commitContains {
+			return false
+		}
+
+		logRefPath := filepath.Join(".hit", "logs", "refs", "heads", newBranch)
+
+		trimmedCommits := srcCommits[:commitIndex+1]
+
+		mappedHash := make(map[string]bool)
+
+		var extractCommit func(hash string) []go_types.Commit
+		extractCommit = func(hash string) []go_types.Commit {
+			for _, commit := range trimmedCommits {
+				if commit.Hash == hash && !mappedHash[commit.Hash] {
+					mappedHash[commit.Hash] = true
+					parent := commit.Parent
+					otherParent := commit.OtherParent
+					localCommits := []go_types.Commit{commit}
+					if parent != "" && parent != "0000000000000000000000000000000000000000" {
+						localCommits = append(localCommits, extractCommit(parent)...)
+					}
+					if otherParent != "" && otherParent != "0000000000000000000000000000000000000000" {
+						localCommits = append(localCommits, extractCommit(otherParent)...)
+					}
+					return localCommits
+				}
+			}
+			return []go_types.Commit{}
+		}
+
+		newCommits := extractCommit(commitHash)
+
+		slices.SortFunc(newCommits, func(a, b go_types.Commit) int {
+			if a.Timestamp.Before(b.Timestamp) {
+				return -1
+			} else if a.Timestamp.After(b.Timestamp) {
+				return 1
+			}
+			return 0
+		})
+
+		newCommitsData, err := json.Marshal(newCommits)
+		if err != nil {
+			return false
+		}
+
+		err = os.WriteFile(logRefPath, newCommitsData, 0644)
+		return err == nil
+	}
+
+	if currentBranch != "" {
+		if copyFromBranch(currentBranch) {
+			return
+		}
+	}
+	headsDir := filepath.Join(".hit", "refs", "heads")
+	entries, err := os.ReadDir(headsDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if name == newBranch || name == currentBranch {
+			continue
+		}
+		if copyFromBranch(name) {
+			return
+		}
+	}
 }
 
 func SwitchBranch(branch string) error {
@@ -164,7 +302,7 @@ func getAllWorkingFiles() (map[string]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
+		ignoreMatcher, _ = storage.NewIgnoreMatcher(repoRoot)
 	}
 
 	err = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
@@ -221,7 +359,7 @@ func updateIndex(tree go_types.Tree) error {
 		if err != nil {
 			return err
 		}
-		ignoreMatcher, err = storage.NewIgnoreMatcher(repoRoot)
+		ignoreMatcher, _ = storage.NewIgnoreMatcher(repoRoot)
 	}
 
 	index := &go_types.Index{

@@ -144,3 +144,60 @@ window.scrollToParent = function (hash) {
     targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 }
+
+let ctxMenu
+function ensureContextMenu(hash) {
+  if (ctxMenu) return ctxMenu
+  ctxMenu = document.createElement('div')
+  ctxMenu.className = 'context-menu'
+  ctxMenu.innerHTML = `
+    <div style="font-size: 12px; font-weight: bold; padding-left: 4px;">${hash.slice(0, 7)}</div>
+    <div class="item" data-action="createBranch">Create Branch…</div>
+    <div class="item" data-action="mergeIntoCurrent">Merge into Current Branch</div>
+  `
+  document.body.appendChild(ctxMenu)
+  ctxMenu.addEventListener('click', (e) => {
+    const actionEl = e.target.closest('.item')
+    if (!actionEl) return
+    const action = actionEl.getAttribute('data-action')
+    const hash = ctxMenu.getAttribute('data-hash')
+    hideContextMenu()
+    if (hash && action) {
+      vscode.postMessage({
+        command: 'graphContextAction',
+        action,
+        commitHash: hash,
+      })
+    }
+  })
+  return ctxMenu
+}
+
+function showContextMenu(hash, x, y) {
+  const menu = ensureContextMenu(hash)
+  menu.style.left = `${x}px`
+  menu.style.top = `${y}px`
+  menu.style.display = 'block'
+  menu.setAttribute('data-hash', hash)
+}
+
+function hideContextMenu() {
+  if (ctxMenu) ctxMenu.style.display = 'none'
+}
+
+document.addEventListener('contextmenu', (e) => {
+  const target = e.target
+  const el = target.closest('[data-hash]')
+  if (el) {
+    e.preventDefault()
+    const hash = el.getAttribute('data-hash')
+    showContextMenu(hash, e.clientX, e.clientY)
+  } else {
+    hideContextMenu()
+  }
+})
+
+document.addEventListener('click', () => hideContextMenu())
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideContextMenu()
+})

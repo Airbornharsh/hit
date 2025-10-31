@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import Log from './log'
-import { cmdRun } from './cmdRun'
+import { cmdRun, cmdRunExec } from './cmdRun'
 import { buildHitUri, hitContentProvider } from './diffProvider'
 
 export class GraphPanel {
@@ -9,6 +9,7 @@ export class GraphPanel {
   private readonly disposables: vscode.Disposable[] = []
   private readonly workspaceDir: string
   private readonly context: vscode.ExtensionContext
+  private headsMap: Record<string, string> = {}
 
   static show(context: vscode.ExtensionContext, title: string, data: any) {
     if (GraphPanel.current) {
@@ -48,6 +49,12 @@ export class GraphPanel {
             break
           case 'openFileDiff':
             await this.handleOpenFileDiff(message.filePath, message.commitHash)
+            break
+          case 'graphContextAction':
+            await this.handleGraphContextAction(
+              message.action,
+              message.commitHash,
+            )
             break
         }
       },
@@ -134,11 +141,44 @@ export class GraphPanel {
     }
   }
 
+  private async handleGraphContextAction(action: string, commitHash: string) {
+    try {
+      if (action === 'createBranch') {
+        const name = await vscode.window.showInputBox({
+          title: 'Create Branch from Commit',
+          placeHolder: 'feature/my-branch',
+          ignoreFocusOut: true,
+        })
+        if (!name) return
+        await cmdRunExec(
+          `hit checkout -b ${name} ${commitHash}`,
+          this.workspaceDir,
+        )
+        vscode.window.showInformationMessage(
+          `Created and switched to '${name}' at ${commitHash.slice(0, 7)}`,
+        )
+      } else if (action === 'mergeIntoCurrent') {
+        const branchName = this.headsMap[commitHash]
+        Log.info('branchName', branchName)
+        if (branchName)
+          await cmdRunExec(`hit merge origin ${branchName}`, this.workspaceDir)
+        else await cmdRunExec(`hit merge -c ${commitHash}`, this.workspaceDir)
+        vscode.window.showInformationMessage(
+          `Merged ${commitHash.slice(0, 7)} into current branch`,
+        )
+      }
+    } catch (err: any) {
+      const msg = typeof err?.message === 'string' ? err.message : String(err)
+      vscode.window.showErrorMessage(msg)
+    }
+  }
+
   private renderHtml(data: any): string {
     const allNodes = Array.isArray(data?.nodes) ? data.nodes : []
     const headsMap: Record<string, string> =
       data && data.heads ? (data.heads as Record<string, string>) : {}
     const currentBranch: string = (data && (data as any).currentBranch) || ''
+    this.headsMap = headsMap
 
     Log.info('allNodes', allNodes)
     Log.info('headsMap', headsMap)
@@ -277,7 +317,7 @@ export class GraphPanel {
           : ''
         const fillColor = laneColor(n.lane)
         const isHead = !!headBranch
-        return `<g class="node" onclick="toggleDetails('${n.hash}')" style="cursor: pointer;">
+        return `<g class="node" data-hash="${n.hash}" onclick="toggleDetails('${n.hash}')" style="cursor: pointer;">
                 ${isHead ? `<circle cx="${cx}" cy="${cy}" r="7" stroke="${stroke}" stroke-width="1" fill="none" opacity="0.3"/>` : ''}
                 <circle cx="${cx}" cy="${cy}" r="5" stroke="${stroke}" stroke-width="1.5" fill="${fillColor}" class="commit-node"><title>${n.hash}\n${title}</title></circle>
                 ${pills}
@@ -349,20 +389,20 @@ export class GraphPanel {
     const lanesWidth = Math.max(1, nextLane) * colW
     const width = leftPad + Math.max(8, nextLane + 2) * colW
     const rowsLeft = leftPad + lanesWidth + 16
-    const headerH = 32
+    const headerH = 36
 
     const list = layout
       .map((n: any) => {
         const y = topPad + n.y * rowH - 14
         const msg = (n.message || '').split('\n')[0]
         return `
-        <div class="row" onclick="toggleDetails('${n.hash}')" style="top:${y}px;">
+        <div class="row" data-hash="${n.hash}" onclick="toggleDetails('${n.hash}')" style="top:${y}px;">
           <span class="message">${msg || '(no message)'}</span>
           <span class="date">${new Date(n.date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) || ''}</span>
           <span class="author">${n.author || ''}</span>
           <span class="hash">${n.hash.slice(0, 7)}</span>
         </div>
-        <div class="details" id="det-${n.hash}" style="display: none; top:${y + rowH}px; left:${rowsLeft}px;">
+        <div class="details" id="det-${n.hash}" data-hash="${n.hash}" style="display: none; top:${y + rowH}px; left:${rowsLeft}px;">
           <div class="details-info">
             <div class="det-row"><span class="det-label">Commit</span><code>${n.hash}</code></div>
             ${n.author ? `<div class="det-row"><span class="det-label">Author</span><span>${n.author}</span></div>` : ''}

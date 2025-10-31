@@ -9,18 +9,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var hash string = ""
 var mergeCmd = &cobra.Command{
 	Use:   "merge [remote] [branch]",
 	Short: "Merge changes from another branch",
 	Long: `Merge changes from another branch into the current branch.
 	
 Examples:
-  hit merge origin main       # Merge remote main branch`,
+  hit merge origin main       # Merge remote main branch
+  hit merge -c <commit hash> # Merge the given commit hash into the current branch`,
 	Args: cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		targetBranch, _ := storage.GetBranch()
 		remoteName := "origin"
 		currentBranch := targetBranch
+
+		if hash != "" {
+			if err := repo.MergeCommitHash(currentBranch, hash); err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Successfully merged commit '%s' into current branch\n", hash)
+			return
+		}
 		if len(args) == 1 {
 			remoteName = args[0]
 		} else if len(args) == 2 {
@@ -42,5 +53,6 @@ Examples:
 }
 
 func init() {
+	mergeCmd.Flags().StringVarP(&hash, "commit", "c", "", "Merge the given commit hash into the current branch")
 	rootCmd.AddCommand(mergeCmd)
 }
