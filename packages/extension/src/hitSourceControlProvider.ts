@@ -1122,8 +1122,28 @@ export class HitSourceControlProvider
     vscode.window.showInformationMessage('Synced changes')
   }
 
-  pull(): void {
-    vscode.window.showInformationMessage('Pulled changes')
+  async pull(): Promise<void> {
+    const repo = this.getRepository()
+    if (!repo) {
+      vscode.window.showWarningMessage('No repository detected')
+      return
+    }
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Pulling ${repo.branch}...`,
+      },
+      async () => {
+        try {
+          await cmdRunExec('hit pull', repo.path)
+          await this.refresh()
+          vscode.window.showInformationMessage('Pull completed')
+        } catch (err: any) {
+          const msg = err?.message || String(err) || 'Unknown error'
+          vscode.window.showErrorMessage(`Pull failed: ${msg}`)
+        }
+      },
+    )
   }
 
   async push(): Promise<void> {
@@ -1151,8 +1171,28 @@ export class HitSourceControlProvider
     )
   }
 
-  fetch(): void {
-    vscode.window.showInformationMessage('Fetched changes')
+  async fetch(): Promise<void> {
+    const repo = this.getRepository()
+    if (!repo) {
+      vscode.window.showWarningMessage('No repository detected')
+      return
+    }
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Fetching...`,
+      },
+      async () => {
+        try {
+          await cmdRunExec('hit fetch', repo.path)
+          await this.refresh()
+          vscode.window.showInformationMessage('Fetch completed')
+        } catch (err: any) {
+          const msg = err?.message || String(err) || 'Unknown error'
+          vscode.window.showErrorMessage(`Fetch failed: ${msg}`)
+        }
+      },
+    )
   }
 
   // Commit UI methods

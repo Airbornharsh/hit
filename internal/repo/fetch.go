@@ -13,6 +13,13 @@ import (
 )
 
 func FetchRemote(remoteName string) error {
+	hasUncommittedChanges, err := hasUncommittedChanges()
+	if err != nil {
+		return fmt.Errorf("failed to check for uncommitted changes: %v", err)
+	}
+	if hasUncommittedChanges {
+		return fmt.Errorf("you have uncommitted changes. Please commit or stash them before fetching")
+	}
 	remoteURL, err := GetRemoteURL(remoteName)
 	if err != nil {
 		return fmt.Errorf("failed to get remote URL: %v", err)

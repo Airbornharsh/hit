@@ -110,8 +110,41 @@ export async function activate(context: vscode.ExtensionContext) {
       await hitSourceControlProvider.push()
     }),
 
+    vscode.commands.registerCommand('hit.pull', async () => {
+      await hitSourceControlProvider.pull()
+    }),
+
+    vscode.commands.registerCommand('hit.fetch', async () => {
+      await hitSourceControlProvider.fetch()
+    }),
+
     vscode.commands.registerCommand('hit.switchBranch', async () => {
       await (hitSourceControlProvider as any).openSwitchBranchQuickPick()
+    }),
+
+    vscode.commands.registerCommand('hit.openSCMenu', async () => {
+      const pick = await vscode.window.showQuickPick(
+        [
+          { label: 'Pull', description: 'hit pull', action: 'pull' },
+          { label: 'Push', description: 'hit push', action: 'push' },
+          { label: 'Fetch', description: 'hit fetch', action: 'fetch' },
+          {
+            label: 'Checkout to…',
+            description: 'switch branch',
+            action: 'switch',
+          },
+        ],
+        { placeHolder: 'Hit actions' },
+      )
+      if (!pick) return
+      if (pick.action === 'pull')
+        return vscode.commands.executeCommand('hit.pull')
+      if (pick.action === 'push')
+        return vscode.commands.executeCommand('hit.push')
+      if (pick.action === 'fetch')
+        return vscode.commands.executeCommand('hit.fetch')
+      if (pick.action === 'switch')
+        return vscode.commands.executeCommand('hit.switchBranch')
     }),
 
     vscode.commands.registerCommand('hit.showGraph', async () => {

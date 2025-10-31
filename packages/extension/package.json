@@ -80,6 +80,24 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "hit.pull",
+        "title": "Pull",
+        "category": "Hit",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hit.fetch",
+        "title": "Fetch",
+        "category": "Hit",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hit.openSCMenu",
+        "title": "Open Menu",
+        "category": "Hit",
+        "icon": "$(ellipsis)"
+      },
+      {
         "command": "hit.switchBranch",
         "title": "Switch Branch",
         "category": "Hit",
@@ -132,6 +150,11 @@
           "command": "hit.showGraph",
           "when": "view == hitSourceControl",
           "group": "navigation@2"
+        },
+        {
+          "command": "hit.openSCMenu",
+          "when": "view == hitSourceControl",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
