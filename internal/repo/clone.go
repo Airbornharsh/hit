@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/airbornharsh/hit/internal/apis"
@@ -15,6 +16,19 @@ import (
 
 func CloneRepository(url string) error {
 	println("Cloning repository from", url)
+
+	part1 := strings.Split(url, "/")
+	part2 := strings.Split(part1[len(part1)-1], ".")
+	remoteName := part2[0]
+
+	err := os.MkdirAll(filepath.Join(remoteName), 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create directory %s: %v", remoteName, err)
+	}
+	err = os.Chdir(filepath.Join(remoteName))
+	if err != nil {
+		return fmt.Errorf("failed to change directory to %s: %v", remoteName, err)
+	}
 
 	if _, err := os.Stat(".hit"); !os.IsNotExist(err) {
 		return fmt.Errorf("repository already exists")
