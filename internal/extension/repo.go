@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/airbornharsh/hit/internal/go_types"
@@ -453,7 +454,9 @@ func HandleGraphLogCommand() go_types.Output {
 	}
 
 	headsDir := filepath.Join(repoRoot, ".hit", "refs", "heads")
+	remotesDir := filepath.Join(repoRoot, ".hit", "refs", "remotes")
 	logsDir := filepath.Join(repoRoot, ".hit", "logs", "refs", "heads")
+	logsRemotesDir := filepath.Join(repoRoot, ".hit", "logs", "refs", "remotes")
 
 	type Node struct {
 		Hash        string   `json:"hash"`
@@ -466,7 +469,7 @@ func HandleGraphLogCommand() go_types.Output {
 	}
 
 	nodes := make(map[string]*Node)
-	heads := make(map[string]string)
+	heads := make(map[string][]string)
 
 	_ = filepath.WalkDir(headsDir, func(p string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
@@ -478,7 +481,41 @@ func HandleGraphLogCommand() go_types.Output {
 			if hash != "" {
 				rel, _ := filepath.Rel(headsDir, p)
 				bname := filepath.ToSlash(rel)
-				heads[hash] = bname
+				list := heads[hash]
+				found := slices.Contains(list, bname)
+				if !found {
+					heads[hash] = append(list, bname)
+				}
+				if nodes[hash] == nil {
+					nodes[hash] = &Node{Hash: hash, Parents: []string{}, Refs: []string{}}
+				}
+			}
+		}
+		return nil
+	})
+
+	_ = filepath.WalkDir(remotesDir, func(p string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err == nil {
+			hash := strings.TrimSpace(string(data))
+			if hash != "" {
+				rel, _ := filepath.Rel(remotesDir, p)
+				rel = filepath.ToSlash(rel)
+				bname := rel
+				list := heads[hash]
+				exists := false
+				for _, v := range list {
+					if v == bname {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					heads[hash] = append(list, bname)
+				}
 				if nodes[hash] == nil {
 					nodes[hash] = &Node{Hash: hash, Parents: []string{}, Refs: []string{}}
 				}
@@ -535,6 +572,86 @@ func HandleGraphLogCommand() go_types.Output {
 				}
 			}
 
+			if len(parents) == 0 && prevHash != "" {
+				parents = []string{prevHash}
+			}
+
+			n := nodes[h]
+			if n == nil {
+				n = &Node{Hash: h}
+			}
+			if n.Message == "" {
+				n.Message = msg
+			}
+			if n.Author == "" {
+				n.Author = author
+			}
+			if n.Date == "" {
+				n.Date = date
+			}
+			if len(n.Parents) == 0 && len(parents) > 0 {
+				n.Parents = parents
+			}
+			if n.OtherParent == "" && otherParent != "" && otherParent != "0000000000000000000000000000000000000000" {
+				n.OtherParent = otherParent
+			}
+			found := slices.Contains(n.Refs, bname)
+			if !found {
+				n.Refs = append(n.Refs, bname)
+			}
+			nodes[h] = n
+			prevHash = h
+		}
+		return nil
+	})
+
+	_ = filepath.WalkDir(logsRemotesDir, func(p string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil
+		}
+		relPath, err := filepath.Rel(logsRemotesDir, p)
+		if err != nil {
+			return nil
+		}
+		relPath = filepath.ToSlash(relPath)
+		bname := relPath
+		content, err := os.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		var arr []map[string]any
+		if err := storage.Unmarshal(content, &arr); err != nil {
+			return nil
+		}
+		var prevHash string
+		for _, entry := range arr {
+			h, _ := entry["hash"].(string)
+			if h == "" {
+				continue
+			}
+			msg, _ := entry["message"].(string)
+			author, _ := entry["author"].(string)
+			date, _ := entry["timestamp"].(string)
+
+			parent, _ := entry["parent"].(string)
+			otherParent, _ := entry["otherParent"].(string)
+
+			var parents []string
+			if parent != "" && parent != "0000000000000000000000000000000000000000" {
+				parents = append(parents, parent)
+			}
+			if otherParent != "" && otherParent != "0000000000000000000000000000000000000000" {
+				parents = append(parents, otherParent)
+			}
+			if len(parents) == 0 {
+				if ps, ok := entry["parents"].([]any); ok {
+					for _, v := range ps {
+						if s, ok := v.(string); ok && s != "" && s != "0000000000000000000000000000000000000000" {
+							parents = append(parents, s)
+						}
+					}
+				}
+			}
 			if len(parents) == 0 && prevHash != "" {
 				parents = []string{prevHash}
 			}

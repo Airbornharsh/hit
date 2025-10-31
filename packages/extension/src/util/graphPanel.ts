@@ -9,7 +9,7 @@ export class GraphPanel {
   private readonly disposables: vscode.Disposable[] = []
   private readonly workspaceDir: string
   private readonly context: vscode.ExtensionContext
-  private headsMap: Record<string, string> = {}
+  private headsMap: Record<string, string[]> = {}
 
   static show(context: vscode.ExtensionContext, title: string, data: any) {
     if (GraphPanel.current) {
@@ -158,10 +158,18 @@ export class GraphPanel {
           `Created and switched to '${name}' at ${commitHash.slice(0, 7)}`,
         )
       } else if (action === 'mergeIntoCurrent') {
-        const branchName = this.headsMap[commitHash]
-        Log.info('branchName', branchName)
-        if (branchName)
-          await cmdRunExec(`hit merge origin ${branchName}`, this.workspaceDir)
+        const branches = this.headsMap[commitHash] || []
+        const preferred = branches.find((b) => !!b) || ''
+        let remote = 'origin'
+        let branch = preferred
+        if (preferred.includes('/')) {
+          const idx = preferred.indexOf('/')
+          remote = preferred.slice(0, idx)
+          branch = preferred.slice(idx + 1)
+        }
+        Log.info('merge from', { remote, branch })
+        if (branch)
+          await cmdRunExec(`hit merge ${remote} ${branch}`, this.workspaceDir)
         else await cmdRunExec(`hit merge -c ${commitHash}`, this.workspaceDir)
         vscode.window.showInformationMessage(
           `Merged ${commitHash.slice(0, 7)} into current branch`,
@@ -175,8 +183,8 @@ export class GraphPanel {
 
   private renderHtml(data: any): string {
     const allNodes = Array.isArray(data?.nodes) ? data.nodes : []
-    const headsMap: Record<string, string> =
-      data && data.heads ? (data.heads as Record<string, string>) : {}
+    const headsMap: Record<string, string[]> =
+      data && data.heads ? (data.heads as Record<string, string[]>) : {}
     const currentBranch: string = (data && (data as any).currentBranch) || ''
     this.headsMap = headsMap
 
@@ -203,10 +211,14 @@ export class GraphPanel {
     const laneToBranch: Record<number, string> = {}
     let nextLane = 0
 
-    Object.entries(headsMap).forEach(([hash, branchName]) => {
+    Object.entries(headsMap).forEach(([hash, branchNames]) => {
+      const primary =
+        Array.isArray(branchNames) && branchNames.length > 0
+          ? branchNames[0]
+          : ''
       if (!hashToLane.has(hash)) {
         hashToLane.set(hash, nextLane)
-        laneToBranch[nextLane] = branchName
+        laneToBranch[nextLane] = primary
         nextLane++
       }
     })
@@ -218,7 +230,7 @@ export class GraphPanel {
     const visited = new Set<string>()
     const queue: Array<{ hash: string; lane: number }> = []
 
-    Object.entries(headsMap).forEach(([hash, branchName]) => {
+    Object.entries(headsMap).forEach(([hash]) => {
       const lane = hashToLane.get(hash) ?? 0
       queue.push({ hash, lane })
       visited.add(hash)
@@ -302,25 +314,11 @@ export class GraphPanel {
         const cy = topPad + n.y * rowH
         const title = (n.message || '').split('\n')[0]
         const stroke = 'var(--vscode-editor-foreground)'
-        let headBranch = headsMap[n.hash]
-        if (headBranch) {
-          if (currentBranch && headBranch === currentBranch) {
-            headBranch = `* ${headBranch}`
-          }
-        }
-        const pills = headBranch
-          ? `<foreignObject x="${cx - 40}" y="${cy - 18}" width="80" height="16">
-             <div xmlns="http://www.w3.org/1999/xhtml" class="pill-row">
-               <span class="ref-pill head">${headBranch}</span>
-             </div>
-           </foreignObject>`
-          : ''
         const fillColor = laneColor(n.lane)
-        const isHead = !!headBranch
+        const isHead = (headsMap[n.hash] || []).length > 0
         return `<g class="node" data-hash="${n.hash}" onclick="toggleDetails('${n.hash}')" style="cursor: pointer;">
                 ${isHead ? `<circle cx="${cx}" cy="${cy}" r="7" stroke="${stroke}" stroke-width="1" fill="none" opacity="0.3"/>` : ''}
                 <circle cx="${cx}" cy="${cy}" r="5" stroke="${stroke}" stroke-width="1.5" fill="${fillColor}" class="commit-node"><title>${n.hash}\n${title}</title></circle>
-                ${pills}
               </g>`
       })
       .join('')
@@ -395,9 +393,34 @@ export class GraphPanel {
       .map((n: any) => {
         const y = topPad + n.y * rowH - 14
         const msg = (n.message || '').split('\n')[0]
+        const headBranches: string[] = (headsMap[n.hash] || []) as string[]
+        const refBranches: string[] = Array.isArray(n.refs)
+          ? (n.refs as string[])
+          : []
+        const tagSet = new Set<string>()
+        const headHtml = headBranches
+          .filter((b) => {
+            if (tagSet.has(b)) return false
+            tagSet.add(b)
+            return true
+          })
+          .map((b) => `<span class="ref-pill head">${b}</span>`)
+          .join(' ')
+        const otherHtml = refBranches
+          .filter((b) => {
+            if (tagSet.has(b)) return false
+            tagSet.add(b)
+            return true
+          })
+          .map((b) => `<span class="ref-pill">${b}</span>`)
+          .join(' ')
+        const tagsHtml =
+          headHtml || otherHtml
+            ? `<span class="tags">${headHtml}${headHtml && otherHtml ? ' ' : ''}${otherHtml}</span>`
+            : ''
         return `
         <div class="row" data-hash="${n.hash}" onclick="toggleDetails('${n.hash}')" style="top:${y}px;">
-          <span class="message">${msg || '(no message)'}</span>
+          <span class="message"> ${headHtml} ${msg || '(no message)'}</span>
           <span class="date">${new Date(n.date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) || ''}</span>
           <span class="author">${n.author || ''}</span>
           <span class="hash">${n.hash.slice(0, 7)}</span>
