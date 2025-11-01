@@ -1,0 +1,58 @@
+name: Build DEB Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-deb:
+    name: Build DEB for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            if [ "$VERSION" == "$GITHUB_REF" ]; then
+              VERSION="dev"
+            fi
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+            if [ "$VERSION" == "$GITHUB_REF" ]; then
+              VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+            fi
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o hit-linux-${{ matrix.arch }} ./main.go
+
+      - name: Build DEB package
+        run: |
+          chmod +x scripts/build-deb.sh
+          ./scripts/build-deb.sh ${{ steps.get_version.outputs.VERSION }} ${{ matrix.arch }}
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hit-${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.deb
+          path: hit_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.deb
