@@ -147,34 +147,34 @@
           "command": "hit.refresh",
           "when": "view == hitSourceControl",
           "group": "navigation"
-        },
-        {
-          "command": "hit.commit",
-          "when": "view == hitSourceControl",
-          "group": "navigation@1"
-        },
-        {
-          "command": "hit.push",
-          "when": "view == hitSourceControl && hit:canPush",
-          "group": "navigation@1"
-        },
-        {
-          "command": "hit.switchBranch",
-          "when": "view == hitSourceControl",
-          "group": "navigation@2"
-        },
-        {
-          "command": "hit.showGraph",
-          "when": "view == hitSourceControl",
-          "group": "navigation@2"
-        },
-        {
-          "command": "hit.openSCMenu",
-          "when": "view == hitSourceControl",
-          "group": "navigation@3"
         }
       ],
       "view/item/context": [
+        {
+          "command": "hit.commit",
+          "when": "view == hitSourceControl && viewItem == repository",
+          "group": "inline@1"
+        },
+        {
+          "command": "hit.push",
+          "when": "view == hitSourceControl && viewItem == repository",
+          "group": "inline@1"
+        },
+        {
+          "command": "hit.switchBranch",
+          "when": "view == hitSourceControl && viewItem == repository",
+          "group": "inline@2"
+        },
+        {
+          "command": "hit.showGraph",
+          "when": "view == hitSourceControl && viewItem == repository",
+          "group": "inline@2"
+        },
+        {
+          "command": "hit.openSCMenu",
+          "when": "view == hitSourceControl && viewItem == repository",
+          "group": "inline@3"
+        },
         {
           "command": "hit.stage",
           "when": "view == hitSourceControl && (viewItem == uncommitted-file || viewItem == uncommitted-folder || viewItem == uncommitted-section)",

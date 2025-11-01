@@ -61,13 +61,13 @@ export class HitSourceControlProvider
   > = this._onDidChangeTreeData.event
 
   // Repository data
-  private mainRepository: Repository | null = null
+  private repositories: Map<string, Repository> = new Map()
   private workspaceRoot: string
-  private commitMessage: string = ''
+  private commitMessages: Map<string, string> = new Map()
   private currentRepository: string | null = null
   private folderHierarchySwitch: boolean = false
-  private canPush: boolean = false
-  private pushAheadCount: number = 0
+  private pushStatuses: Map<string, { canPush: boolean; aheadCount: number }> =
+    new Map()
 
   constructor() {
     this.workspaceRoot =
@@ -129,7 +129,11 @@ export class HitSourceControlProvider
     }
 
     if (!element) {
-      return this.getSingleRepositoryChildren()
+      return this.getRepositoriesList()
+    }
+
+    if (element.contextValue === 'repository') {
+      return this.getRepositoryChildren(element.repositoryName!)
     }
 
     if (element.contextValue === 'staged-section') {
@@ -160,20 +164,42 @@ export class HitSourceControlProvider
       '**/.hit/HEAD',
       '**/node_modules/**',
     )
-    if (files.length > 0) {
-      const file = files[0]
-      const repoPath = file.fsPath.split('/.hit/HEAD')[0]
-      const repoName = repoPath.split('/').pop() || ''
-      const headFile = fs.readFileSync(file.path, 'utf8')
-      const branch = headFile.split('ref: refs/heads/')[1].trim()
 
-      this.mainRepository = await this.createRepository(
-        repoName,
-        repoPath,
-        branch,
-        true,
-      )
-      await this.updateCanPushContext()
+    this.repositories.clear()
+
+    for (const file of files) {
+      try {
+        const repoPath = file.fsPath.split('/.hit/HEAD')[0]
+        const pathParts = repoPath.split(/[/\\]/)
+        const repoName = pathParts[pathParts.length - 1] || 'Unknown'
+
+        const repoKey = repoPath
+
+        if (!fs.existsSync(path.join(repoPath, '.hit', 'HEAD'))) {
+          continue
+        }
+
+        const headFile = fs.readFileSync(
+          path.join(repoPath, '.hit', 'HEAD'),
+          'utf8',
+        )
+        const branch = headFile.split('ref: refs/heads/')[1]?.trim() || 'main'
+
+        const repo = await this.createRepository(
+          repoName,
+          repoPath,
+          branch,
+          false,
+        )
+        this.repositories.set(repoKey, repo)
+        await this.updateCanPushContextForRepo(repoKey)
+      } catch (error) {
+        Log.error(`Error initializing repository at ${file.fsPath}:`, error)
+      }
+    }
+
+    if (this.repositories.size > 0 && !this.currentRepository) {
+      this.currentRepository = Array.from(this.repositories.keys())[0]
     }
   }
 
@@ -247,20 +273,43 @@ export class HitSourceControlProvider
     }
   }
 
-  getRepository(): Repository | null {
-    return this.mainRepository || null
+  getRepository(repoKey?: string): Repository | null {
+    if (repoKey) {
+      return this.repositories.get(repoKey) || null
+    }
+    if (this.repositories.size === 0) {
+      return null
+    }
+    if (this.currentRepository) {
+      return this.repositories.get(this.currentRepository) || null
+    }
+    return Array.from(this.repositories.values())[0] || null
   }
 
-  // Commit Message Management
-  getCommitMessage(): string {
-    return this.commitMessage
+  getAllRepositories(): Repository[] {
+    return Array.from(this.repositories.values())
   }
 
-  setCommitMessage(message: string): void {
-    this.commitMessage = message
+  getRepositoryByKey(repoKey: string): Repository | null {
+    return this.repositories.get(repoKey) || null
   }
 
-  // Tree View Methods
+  getCurrentRepository(): string | null {
+    return this.currentRepository
+  }
+
+  getCommitMessage(repoKey?: string): string {
+    const key = repoKey || this.currentRepository || ''
+    return this.commitMessages.get(key) || ''
+  }
+
+  setCommitMessage(message: string, repoKey?: string): void {
+    const key = repoKey || this.currentRepository || ''
+    if (key) {
+      this.commitMessages.set(key, message)
+    }
+  }
+
   private getSignInChildren(): Thenable<HitTreeItem[]> {
     const rootItems: HitTreeItem[] = []
     rootItems.push(
@@ -282,13 +331,77 @@ export class HitSourceControlProvider
     return Promise.resolve(rootItems)
   }
 
-  private getSingleRepositoryChildren(): Thenable<HitTreeItem[]> {
-    const mainRepo = this.getRepository()
-    if (!mainRepo) {
+  private getRepositoriesList(): Thenable<HitTreeItem[]> {
+    const repos = this.getAllRepositories()
+    if (repos.length === 0) {
       return Promise.resolve([])
     }
 
-    this.currentRepository = mainRepo.name
+    const sortedRepos = [...repos].sort((a, b) => a.name.localeCompare(b.name))
+
+    const repoItems: HitTreeItem[] = []
+    for (const repo of sortedRepos) {
+      const repoKey = this.getRepositoryKey(repo.path)
+      const pushStatus = this.pushStatuses.get(repoKey) || {
+        canPush: false,
+        aheadCount: 0,
+      }
+
+      let statusIcon: vscode.ThemeIcon
+      let statusDescription = ''
+
+      if (repo.hasStagedChanges) {
+        statusIcon = new vscode.ThemeIcon('check')
+        statusDescription = 'Staged changes'
+      } else if (repo.hasUncommittedChanges) {
+        statusIcon = new vscode.ThemeIcon('diff')
+        statusDescription = 'Uncommitted changes'
+      } else if (pushStatus.canPush) {
+        statusIcon = new vscode.ThemeIcon('cloud-upload')
+        statusDescription = `Push (${pushStatus.aheadCount})`
+      } else {
+        statusIcon = new vscode.ThemeIcon('git-branch')
+        statusDescription = 'Up to date'
+      }
+
+      const description = `${repo.branch} • ${statusDescription}`
+
+      repoItems.push(
+        new HitTreeItem(
+          repo.name,
+          vscode.TreeItemCollapsibleState.Collapsed,
+          undefined,
+          new vscode.ThemeIcon('repo'),
+          'repository',
+          undefined,
+          description,
+          `${repo.name} (${repo.branch}) - ${statusDescription}`,
+          repo.path,
+          true,
+          repoKey,
+        ),
+      )
+    }
+
+    return Promise.resolve(repoItems)
+  }
+
+  private getRepositoryKey(repoPath: string): string {
+    for (const [key, repo] of this.repositories.entries()) {
+      if (repo.path === repoPath) {
+        return key
+      }
+    }
+    return repoPath
+  }
+
+  private getRepositoryChildren(repoKey: string): Thenable<HitTreeItem[]> {
+    const repo = this.getRepositoryByKey(repoKey)
+    if (!repo) {
+      return Promise.resolve([])
+    }
+
+    this.currentRepository = repoKey
     const rootItems: HitTreeItem[] = []
 
     rootItems.push(
@@ -298,43 +411,49 @@ export class HitSourceControlProvider
         {
           command: 'hit.showCommitMessageInput',
           title: 'Commit Message',
-          arguments: [],
+          arguments: [repoKey],
         },
         new vscode.ThemeIcon('edit'),
         'input-area',
         undefined,
-        this.getCommitMessage() || 'Click to open commit message input dialog',
+        this.getCommitMessage(repoKey) ||
+          'Click to open commit message input dialog',
         'Enter your text here',
         undefined,
         undefined,
-        mainRepo.name,
+        repoKey,
       ),
     )
 
+    const pushStatus = this.pushStatuses.get(repoKey) || {
+      canPush: false,
+      aheadCount: 0,
+    }
+
     if (
-      this.canPush &&
+      pushStatus.canPush &&
       !(
-        mainRepo.stagedFileStatuses.size > 0 ||
-        mainRepo.uncommittedFileStatuses.size > 0
+        repo.stagedFileStatuses.size > 0 ||
+        repo.uncommittedFileStatuses.size > 0
       )
     ) {
       rootItems.push(
         new HitTreeItem(
-          `Push (${this.pushAheadCount})`,
+          `Push (${pushStatus.aheadCount})`,
           vscode.TreeItemCollapsibleState.None,
           {
             command: 'hit.push',
             title: 'Push',
-            arguments: [],
+            arguments: [repoKey],
           },
           new vscode.ThemeIcon('cloud-upload'),
           'push-button',
           undefined,
-          `Push ${mainRepo.branch}`,
+          `Push ${repo.branch}`,
           undefined,
           undefined,
           undefined,
-          mainRepo.name,
+          repoKey,
         ),
       )
     } else {
@@ -345,21 +464,20 @@ export class HitSourceControlProvider
           {
             command: 'hit.commit',
             title: 'Commit Changes',
-            arguments: [],
+            arguments: [repoKey],
           },
           new vscode.ThemeIcon('check'),
           'commit-button',
           undefined,
-          `Commit ${mainRepo.branch}`,
+          `Commit ${repo.branch}`,
           undefined,
           undefined,
           undefined,
-          mainRepo.name,
+          repoKey,
         ),
       )
     }
 
-    // Staged Changes section
     rootItems.push(
       new HitTreeItem(
         'Staged Changes',
@@ -368,15 +486,14 @@ export class HitSourceControlProvider
         new vscode.ThemeIcon('check'),
         'staged-section',
         undefined,
-        `${mainRepo.stagedFileStatuses.size}`,
+        `${repo.stagedFileStatuses.size}`,
         undefined,
         undefined,
         undefined,
-        mainRepo.name,
+        repoKey,
       ),
     )
 
-    // Changes section
     rootItems.push(
       new HitTreeItem(
         'Changes',
@@ -385,11 +502,11 @@ export class HitSourceControlProvider
         new vscode.ThemeIcon('diff'),
         'uncommitted-section',
         undefined,
-        `${mainRepo.uncommittedFileStatuses.size}`,
+        `${repo.uncommittedFileStatuses.size}`,
         undefined,
         undefined,
         undefined,
-        mainRepo.name,
+        repoKey,
       ),
     )
 
@@ -397,10 +514,10 @@ export class HitSourceControlProvider
   }
 
   private getRepositorySectionChildren(
-    repoName: string,
+    repoKey: string,
     type: 'staged' | 'uncommitted',
   ): Thenable<HitTreeItem[]> {
-    const repo = this.getRepository()
+    const repo = this.getRepositoryByKey(repoKey)
     if (!repo) {
       return Promise.resolve([])
     }
@@ -410,7 +527,7 @@ export class HitSourceControlProvider
 
     const files = Array.from(fileMap.values())
 
-    return Promise.resolve(this.buildHierarchicalTree(files, type, repoName))
+    return Promise.resolve(this.buildHierarchicalTree(files, type, repoKey))
   }
 
   private getFolderChildren(element: HitTreeItem): Thenable<HitTreeItem[]> {
@@ -418,7 +535,7 @@ export class HitSourceControlProvider
       return Promise.resolve([])
     }
 
-    const repo = this.getRepository()
+    const repo = this.getRepositoryByKey(element.repositoryName)
     if (!repo) {
       return Promise.resolve([])
     }
@@ -488,11 +605,11 @@ export class HitSourceControlProvider
   private buildHierarchicalTree(
     files: FileStatus[],
     type: 'staged' | 'uncommitted',
-    repoName: string,
+    repoKey: string,
   ): HitTreeItem[] {
     if (!this.folderHierarchySwitch) {
       return files.map((fileStatus) =>
-        this.createFileTreeItem(fileStatus, type, repoName),
+        this.createFileTreeItem(fileStatus, type, repoKey),
       )
     }
 
@@ -523,7 +640,7 @@ export class HitSourceControlProvider
             undefined,
             currentPath,
             true,
-            repoName,
+            repoKey,
           )
 
           folderMap.set(currentPath, folderItem)
@@ -541,7 +658,7 @@ export class HitSourceControlProvider
         parentFolder = folderMap.get(currentPath)
       }
 
-      const fileItem = this.createFileTreeItem(fileStatus, type, repoName)
+      const fileItem = this.createFileTreeItem(fileStatus, type, repoKey)
 
       if (parentFolder) {
         if (!parentFolder.children) {
@@ -564,7 +681,7 @@ export class HitSourceControlProvider
     return tree
   }
 
-  private toRelativePath(absPath: string, repoPath: string): string {
+  toRelativePath(absPath: string, repoPath: string): string {
     const rel = path.relative(repoPath, absPath)
     return rel.split(path.sep).join('/')
   }
@@ -584,7 +701,7 @@ export class HitSourceControlProvider
   private createFileTreeItem(
     fileStatus: FileStatus,
     type: 'staged' | 'uncommitted',
-    repoName: string,
+    repoKey: string,
   ): HitTreeItem {
     const fileStatusProvider = new FileStatusProvider()
     const icon = fileStatusProvider.getFileIcon(fileStatus.path)
@@ -592,7 +709,6 @@ export class HitSourceControlProvider
       fileStatus.status,
     )
 
-    // Use specific context values for buttons like Git extension
     const contextValue = type === 'staged' ? 'staged-file' : 'uncommitted-file'
 
     const fileLabel = `${path.basename(fileStatus.path)} (${fileStatus.status})`
@@ -615,7 +731,7 @@ export class HitSourceControlProvider
             `${fileStatus.path} (${statusDescription})`,
             fileStatus.path,
             false,
-            repoName,
+            repoKey,
           ),
         ],
       },
@@ -626,7 +742,7 @@ export class HitSourceControlProvider
       `${fileStatus.path} (${statusDescription})`,
       fileStatus.path,
       false,
-      repoName,
+      repoKey,
     )
 
     return item
@@ -643,14 +759,17 @@ export class HitSourceControlProvider
       if (item.isFolder) {
         this.stageFolder(item)
       } else {
-        this.stageFileInRepository(item.path)
+        this.stageFileInRepository(item.path, item.repositoryName)
         this._onDidChangeTreeData.fire()
         vscode.window.showInformationMessage(`Staged: ${item.label}`)
       }
     } else if (item.contextValue === 'uncommitted-section') {
-      this.stageAllInRepository()
-      this._onDidChangeTreeData.fire()
-      vscode.window.showInformationMessage('Staged all changes')
+      const repoKey = item.repositoryName || this.currentRepository
+      if (repoKey) {
+        this.stageAllInRepository(repoKey)
+        this._onDidChangeTreeData.fire()
+        vscode.window.showInformationMessage('Staged all changes')
+      }
     }
   }
 
@@ -664,49 +783,56 @@ export class HitSourceControlProvider
       if (item.isFolder) {
         this.unstageFolder(item)
       } else {
-        this.unstageFileInRepository(item.path)
+        this.unstageFileInRepository(item.path, item.repositoryName)
         this._onDidChangeTreeData.fire()
         vscode.window.showInformationMessage(`Unstaged: ${item.label}`)
       }
     } else if (item.contextValue === 'staged-section') {
-      this.unstageAllInRepository()
-      this._onDidChangeTreeData.fire()
-      vscode.window.showInformationMessage('Unstaged all changes')
+      const repoKey = item.repositoryName || this.currentRepository
+      if (repoKey) {
+        this.unstageAllInRepository(repoKey)
+        this._onDidChangeTreeData.fire()
+        vscode.window.showInformationMessage('Unstaged all changes')
+      }
     }
   }
 
   stageAll(): void {
     if (this.currentRepository) {
-      this.stageAllInRepository()
+      this.stageAllInRepository(this.currentRepository)
       this._onDidChangeTreeData.fire()
     }
   }
 
   unstageAll(): void {
     if (this.currentRepository) {
-      this.unstageAllInRepository()
+      this.unstageAllInRepository(this.currentRepository)
       this._onDidChangeTreeData.fire()
     }
   }
 
-  async commit(message?: string): Promise<void> {
-    const repo = this.getRepository()
+  async commit(message?: string, repoKey?: string): Promise<void> {
+    const targetRepoKey = repoKey || this.currentRepository
+    const repo = targetRepoKey
+      ? this.getRepositoryByKey(targetRepoKey)
+      : this.getRepository()
     if (!repo) {
       vscode.window.showWarningMessage('No repository detected')
       return
     }
 
-    let finalMessage = message || this.getCommitMessage()
+    let finalMessage =
+      message || this.getCommitMessage(targetRepoKey || undefined)
     if (!finalMessage) {
       finalMessage =
         (await vscode.window.showInputBox({
           prompt: 'Commit message',
-          placeHolder: `Message (⌘⏎ to commit on "${this.getCurrentBranch()}")`,
+          placeHolder: `Message (⌘⏎ to commit on "${repo.branch}")`,
           value: '',
           valueSelection: [0, 0],
         })) || ''
       if (!finalMessage) return
-      this.setCommitMessage(finalMessage)
+      this.setCommitMessage(finalMessage, targetRepoKey || undefined)
     }
 
     const safeMsg = finalMessage.replace(/"/g, '\\"')
@@ -729,7 +855,7 @@ export class HitSourceControlProvider
       async () => {
         try {
           await cmdRunExec(`hit commit -m "${safeMsg}"`, repo.path)
-          this.setCommitMessage('')
+          this.setCommitMessage('', targetRepoKey || undefined)
           await this.refresh()
           vscode.window.showInformationMessage('Commit completed')
         } catch (err: any) {
@@ -748,9 +874,12 @@ export class HitSourceControlProvider
         this.revertFile(item)
       }
     } else if (item.contextValue === 'uncommitted-section') {
-      this.revertAllInRepository()
-      this._onDidChangeTreeData.fire()
-      vscode.window.showInformationMessage('Reverted all uncommitted changes')
+      const repoKey = item.repositoryName || this.currentRepository
+      if (repoKey) {
+        this.revertAllInRepository(repoKey)
+        this._onDidChangeTreeData.fire()
+        vscode.window.showInformationMessage('Reverted all uncommitted changes')
+      }
     }
   }
 
@@ -762,22 +891,23 @@ export class HitSourceControlProvider
     })
   }
 
-  getCurrentBranch(): string {
-    if (this.currentRepository) {
-      return this.getRepositoryCurrentBranch()
-    }
-    return 'main'
+  getCurrentBranch(repoKey?: string): string {
+    const targetRepoKey = repoKey || this.currentRepository
+    return this.getRepositoryCurrentBranch(targetRepoKey || undefined)
   }
 
-  checkout(branch: string): void {
-    if (this.currentRepository) {
-      this.checkoutRepositoryBranch(branch)
+  checkout(branch: string, repoKey?: string): void {
+    const targetRepoKey = repoKey || this.currentRepository
+    if (targetRepoKey) {
+      this.checkoutRepositoryBranch(branch, targetRepoKey)
       this._onDidChangeTreeData.fire()
     }
   }
 
-  stageFileInRepository(filePath: string): void {
-    const repo = this.getRepository()
+  stageFileInRepository(filePath: string, repoKey?: string): void {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
     if (repo) {
       const relativePath = this.toRelativePath(filePath, repo.path)
       const fileStatus = repo.uncommittedFileStatuses.get(relativePath)
@@ -796,8 +926,10 @@ export class HitSourceControlProvider
     }
   }
 
-  unstageFileInRepository(filePath: string): void {
-    const repo = this.getRepository()
+  unstageFileInRepository(filePath: string, repoKey?: string): void {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
     if (repo) {
       const relativePath = this.toRelativePath(filePath, repo.path)
       const fileStatus = repo.stagedFileStatuses.get(relativePath)
@@ -816,8 +948,10 @@ export class HitSourceControlProvider
     }
   }
 
-  stageAllInRepository(): void {
-    const repo = this.getRepository()
+  stageAllInRepository(repoKey?: string): void {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
     if (repo) {
       cmdRunExec('hit add .', repo.path)
         .then(() => {
@@ -832,8 +966,10 @@ export class HitSourceControlProvider
     }
   }
 
-  unstageAllInRepository(): void {
-    const repo = this.getRepository()
+  unstageAllInRepository(repoKey?: string): void {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
     if (repo) {
       cmdRunExec('hit reset .', repo.path)
         .then(() => {
@@ -848,18 +984,26 @@ export class HitSourceControlProvider
     }
   }
 
-  getRepositoryCurrentBranch(): string {
-    return this.mainRepository ? this.mainRepository.branch : 'main'
+  getRepositoryCurrentBranch(repoKey?: string): string {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
+    return repo ? repo.branch : 'main'
   }
 
-  checkoutRepositoryBranch(branch: string): void {
-    if (this.mainRepository) {
-      this.mainRepository.branch = branch
+  checkoutRepositoryBranch(branch: string, repoKey?: string): void {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
+    if (repo) {
+      repo.branch = branch
     }
   }
 
-  revertAllInRepository(): void {
-    const repo = this.getRepository()
+  revertAllInRepository(repoKey?: string): void {
+    const repo = repoKey
+      ? this.getRepositoryByKey(repoKey)
+      : this.getRepository()
     if (repo) {
       cmdRunExec('hit revert .', repo.path)
         .then(() => {
@@ -907,6 +1051,9 @@ export class HitSourceControlProvider
   async refresh(): Promise<void> {
     try {
       await this.initializeRepository()
+      for (const repoKey of this.repositories.keys()) {
+        await this.updateCanPushContextForRepo(repoKey)
+      }
       await this.updateCanPushContext()
       this._onDidChangeTreeData.fire()
     } catch (error) {
@@ -929,6 +1076,31 @@ export class HitSourceControlProvider
     return this.folderHierarchySwitch
   }
 
+  private async updateCanPushContextForRepo(repoKey: string): Promise<void> {
+    try {
+      const repo = this.getRepositoryByKey(repoKey)
+      if (!repo) {
+        this.pushStatuses.set(repoKey, { canPush: false, aheadCount: 0 })
+        return
+      }
+      const res = await cmdRun<CommandInput, CommandOutput>({
+        command: 'push-status',
+        workspaceDir: repo.path,
+      })
+      if (res.success && res.data) {
+        const data = res.data as any
+        this.pushStatuses.set(repoKey, {
+          canPush: !!data.needPush,
+          aheadCount: data.aheadCount || 0,
+        })
+      } else {
+        this.pushStatuses.set(repoKey, { canPush: false, aheadCount: 0 })
+      }
+    } catch (e) {
+      this.pushStatuses.set(repoKey, { canPush: false, aheadCount: 0 })
+    }
+  }
+
   private async updateCanPushContext(): Promise<void> {
     try {
       const repo = this.getRepository()
@@ -941,33 +1113,21 @@ export class HitSourceControlProvider
         )
         return
       }
-      const res = await cmdRun<CommandInput, CommandOutput>({
-        command: 'push-status',
-        workspaceDir: repo.path,
-      })
-      Log.log('Push status:', res)
-      if (res.success && res.data) {
-        const data = res.data as any
-        this.canPush = !!data.needPush
-        this.pushAheadCount = data.aheadCount || 0
-        await vscode.commands.executeCommand(
-          'setContext',
-          'hit:canPush',
-          !!data.needPush,
-        )
-        await vscode.commands.executeCommand(
-          'setContext',
-          'hit:pushAheadCount',
-          data.aheadCount || 0,
-        )
-      } else {
-        await vscode.commands.executeCommand('setContext', 'hit:canPush', false)
-        await vscode.commands.executeCommand(
-          'setContext',
-          'hit:pushAheadCount',
-          0,
-        )
+      const repoKey = this.getRepositoryKey(repo.path)
+      const pushStatus = this.pushStatuses.get(repoKey) || {
+        canPush: false,
+        aheadCount: 0,
       }
+      await vscode.commands.executeCommand(
+        'setContext',
+        'hit:canPush',
+        pushStatus.canPush,
+      )
+      await vscode.commands.executeCommand(
+        'setContext',
+        'hit:pushAheadCount',
+        pushStatus.aheadCount,
+      )
     } catch (e) {
       await vscode.commands.executeCommand('setContext', 'hit:canPush', false)
       await vscode.commands.executeCommand(
@@ -979,7 +1139,9 @@ export class HitSourceControlProvider
   }
 
   private stageFolder(item: HitTreeItem): void {
-    const repo = this.getRepository()
+    const repo = item.repositoryName
+      ? this.getRepositoryByKey(item.repositoryName)
+      : this.getRepository()
     if (repo && item.path) {
       cmdRunExec(`hit add "${item.path}"`, repo.path)
         .then(() => {
@@ -996,7 +1158,9 @@ export class HitSourceControlProvider
   }
 
   private unstageFolder(item: HitTreeItem): void {
-    const repo = this.getRepository()
+    const repo = item.repositoryName
+      ? this.getRepositoryByKey(item.repositoryName)
+      : this.getRepository()
     if (repo && item.path) {
       cmdRunExec(`hit reset "${item.path}"`, repo.path)
         .then(() => {
@@ -1013,7 +1177,9 @@ export class HitSourceControlProvider
   }
 
   private revertFile(item: HitTreeItem): void {
-    const repo = this.getRepository()
+    const repo = item.repositoryName
+      ? this.getRepositoryByKey(item.repositoryName)
+      : this.getRepository()
     if (repo && item.path) {
       const relativePath = this.toRelativePath(item.path, repo.path)
 
@@ -1032,7 +1198,9 @@ export class HitSourceControlProvider
   }
 
   private revertFolder(item: HitTreeItem): void {
-    const repo = this.getRepository()
+    const repo = item.repositoryName
+      ? this.getRepositoryByKey(item.repositoryName)
+      : this.getRepository()
     if (repo && item.path) {
       cmdRunExec(`hit revert "${item.path}"`, repo.path)
         .then(() => {
@@ -1049,8 +1217,11 @@ export class HitSourceControlProvider
   }
 
   // Branch switching: list branches via cmdRun and checkout via cmdRunExec
-  async openSwitchBranchQuickPick(): Promise<void> {
-    const repo = this.getRepository()
+  async openSwitchBranchQuickPick(repoKey?: string): Promise<void> {
+    const targetRepoKey = repoKey || this.currentRepository
+    const repo = targetRepoKey
+      ? this.getRepositoryByKey(targetRepoKey)
+      : this.getRepository()
     if (!repo) {
       vscode.window.showWarningMessage('No repository detected')
       return
@@ -1170,8 +1341,11 @@ export class HitSourceControlProvider
     vscode.window.showInformationMessage('Synced changes')
   }
 
-  async pull(): Promise<void> {
-    const repo = this.getRepository()
+  async pull(repoKey?: string): Promise<void> {
+    const targetRepoKey = repoKey || this.currentRepository
+    const repo = targetRepoKey
+      ? this.getRepositoryByKey(targetRepoKey)
+      : this.getRepository()
     if (!repo) {
       vscode.window.showWarningMessage('No repository detected')
       return
@@ -1194,8 +1368,11 @@ export class HitSourceControlProvider
     )
   }
 
-  async push(): Promise<void> {
-    const repo = this.getRepository()
+  async push(repoKey?: string): Promise<void> {
+    const targetRepoKey = repoKey || this.currentRepository
+    const repo = targetRepoKey
+      ? this.getRepositoryByKey(targetRepoKey)
+      : this.getRepository()
     if (!repo) {
       vscode.window.showWarningMessage('No repository detected')
       return
@@ -1219,12 +1396,22 @@ export class HitSourceControlProvider
     )
   }
 
-  getPushAheadCount(): string {
-    return this.pushAheadCount > 0 ? ` (${this.pushAheadCount})` : ''
+  getPushAheadCount(repoKey?: string): string {
+    const targetRepoKey = repoKey || this.currentRepository
+    const pushStatus = targetRepoKey
+      ? this.pushStatuses.get(targetRepoKey) || {
+          canPush: false,
+          aheadCount: 0,
+        }
+      : { canPush: false, aheadCount: 0 }
+    return pushStatus.aheadCount > 0 ? ` (${pushStatus.aheadCount})` : ''
   }
 
-  async fetch(): Promise<void> {
-    const repo = this.getRepository()
+  async fetch(repoKey?: string): Promise<void> {
+    const targetRepoKey = repoKey || this.currentRepository
+    const repo = targetRepoKey
+      ? this.getRepositoryByKey(targetRepoKey)
+      : this.getRepository()
     if (!repo) {
       vscode.window.showWarningMessage('No repository detected')
       return

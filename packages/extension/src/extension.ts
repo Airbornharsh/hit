@@ -31,18 +31,25 @@ export async function activate(context: vscode.ExtensionContext) {
       hitSourceControlProvider.signIn()
     }),
 
-    vscode.commands.registerCommand('hit.showCommitMessageInput', async () => {
-      const input = await vscode.window.showInputBox({
-        prompt: 'Enter your text',
-        placeHolder: 'Type something here...',
-        value: hitSourceControlProvider.getCommitMessage() || '',
-        valueSelection: [0, 0],
-      })
-      if (input !== undefined) {
-        hitSourceControlProvider.setCommitMessage(input)
-      }
-      await hitSourceControlProvider.refresh()
-    }),
+    vscode.commands.registerCommand(
+      'hit.showCommitMessageInput',
+      async (repoKey?: string) => {
+        const targetRepoKey =
+          repoKey ||
+          hitSourceControlProvider.getCurrentRepository() ||
+          undefined
+        const input = await vscode.window.showInputBox({
+          prompt: 'Enter your text',
+          placeHolder: 'Type something here...',
+          value: hitSourceControlProvider.getCommitMessage(targetRepoKey) || '',
+          valueSelection: [0, 0],
+        })
+        if (input !== undefined) {
+          hitSourceControlProvider.setCommitMessage(input, targetRepoKey)
+        }
+        await hitSourceControlProvider.refresh()
+      },
+    ),
 
     vscode.commands.registerCommand('hit.toggleFolderHierarchy', () => {
       hitSourceControlProvider.toggleFolderHierarchy()
@@ -70,10 +77,12 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'hit.openDiff',
       async (item: HitTreeItem) => {
-        if (!item || !item.repositoryName) return
-        const repo = hitSourceControlProvider.getRepository()
-        if (!repo || !item.path) return
-        const relPath = (hitSourceControlProvider as any)['toRelativePath'](
+        if (!item || !item.repositoryName || !item.path) return
+        const repo = hitSourceControlProvider.getRepositoryByKey(
+          item.repositoryName,
+        )
+        if (!repo) return
+        const relPath = hitSourceControlProvider.toRelativePath(
           item.path,
           repo.path,
         )
@@ -109,71 +118,122 @@ export async function activate(context: vscode.ExtensionContext) {
       await hitSourceControlProvider.refresh()
     }),
 
-    vscode.commands.registerCommand('hit.commit', async () => {
-      await hitSourceControlProvider.commit()
+    vscode.commands.registerCommand(
+      'hit.commit',
+      async (item?: HitTreeItem | string) => {
+        const repoKey =
+          typeof item === 'string'
+            ? item
+            : item?.repositoryName ||
+              hitSourceControlProvider.getCurrentRepository() ||
+              undefined
+        await hitSourceControlProvider.commit(undefined, repoKey)
+      },
+    ),
+
+    vscode.commands.registerCommand(
+      'hit.push',
+      async (item?: HitTreeItem | string) => {
+        const repoKey =
+          typeof item === 'string'
+            ? item
+            : item?.repositoryName ||
+              hitSourceControlProvider.getCurrentRepository() ||
+              undefined
+        await hitSourceControlProvider.push(repoKey)
+      },
+    ),
+
+    vscode.commands.registerCommand('hit.pull', async (repoKey?: string) => {
+      await hitSourceControlProvider.pull(repoKey)
     }),
 
-    vscode.commands.registerCommand('hit.push', async () => {
-      await hitSourceControlProvider.push()
+    vscode.commands.registerCommand('hit.fetch', async (repoKey?: string) => {
+      await hitSourceControlProvider.fetch(repoKey)
     }),
 
-    vscode.commands.registerCommand('hit.pull', async () => {
-      await hitSourceControlProvider.pull()
-    }),
+    vscode.commands.registerCommand(
+      'hit.switchBranch',
+      async (item?: HitTreeItem | string) => {
+        const repoKey =
+          typeof item === 'string'
+            ? item
+            : item?.repositoryName ||
+              hitSourceControlProvider.getCurrentRepository() ||
+              undefined
+        await (hitSourceControlProvider as any).openSwitchBranchQuickPick(
+          repoKey,
+        )
+      },
+    ),
 
-    vscode.commands.registerCommand('hit.fetch', async () => {
-      await hitSourceControlProvider.fetch()
-    }),
+    vscode.commands.registerCommand(
+      'hit.openSCMenu',
+      async (item?: HitTreeItem | string) => {
+        const repoKey =
+          typeof item === 'string'
+            ? item
+            : item?.repositoryName ||
+              hitSourceControlProvider.getCurrentRepository() ||
+              undefined
+        const pushAheadCount =
+          hitSourceControlProvider.getPushAheadCount(repoKey)
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: 'Pull', description: 'hit pull', action: 'pull' },
+            {
+              label: 'Push' + pushAheadCount,
+              description: 'hit push',
+              action: 'push',
+            },
+            { label: 'Fetch', description: 'hit fetch', action: 'fetch' },
+            {
+              label: 'Checkout to…',
+              description: 'switch branch',
+              action: 'switch',
+            },
+          ],
+          { placeHolder: 'Hit actions' },
+        )
+        if (!pick) return
+        if (pick.action === 'pull')
+          return vscode.commands.executeCommand('hit.pull', repoKey)
+        if (pick.action === 'push')
+          return vscode.commands.executeCommand('hit.push', repoKey)
+        if (pick.action === 'fetch')
+          return vscode.commands.executeCommand('hit.fetch', repoKey)
+        if (pick.action === 'switch')
+          return vscode.commands.executeCommand('hit.switchBranch', repoKey)
+      },
+    ),
 
-    vscode.commands.registerCommand('hit.switchBranch', async () => {
-      await (hitSourceControlProvider as any).openSwitchBranchQuickPick()
-    }),
-
-    vscode.commands.registerCommand('hit.openSCMenu', async () => {
-      const pick = await vscode.window.showQuickPick(
-        [
-          { label: 'Pull', description: 'hit pull', action: 'pull' },
-          {
-            label: 'Push' + hitSourceControlProvider.getPushAheadCount(),
-            description: 'hit push',
-            action: 'push',
-          },
-          { label: 'Fetch', description: 'hit fetch', action: 'fetch' },
-          {
-            label: 'Checkout to…',
-            description: 'switch branch',
-            action: 'switch',
-          },
-        ],
-        { placeHolder: 'Hit actions' },
-      )
-      if (!pick) return
-      if (pick.action === 'pull')
-        return vscode.commands.executeCommand('hit.pull')
-      if (pick.action === 'push')
-        return vscode.commands.executeCommand('hit.push')
-      if (pick.action === 'fetch')
-        return vscode.commands.executeCommand('hit.fetch')
-      if (pick.action === 'switch')
-        return vscode.commands.executeCommand('hit.switchBranch')
-    }),
-
-    vscode.commands.registerCommand('hit.showGraph', async () => {
-      const repo = hitSourceControlProvider.getRepository()
-      if (!repo) {
-        vscode.window.showWarningMessage('No repository detected')
-        return
-      }
-      const res = await cmdRun<CommandInput, CommandOutput>({
-        command: 'graph-log',
-        workspaceDir: repo.path,
-      })
-      if (!res.success) {
-        vscode.window.showErrorMessage(res.message || 'Failed to load graph')
-        return
-      }
-      GraphPanel.show(context, `Hit Graph — ${repo.name}`, res.data)
-    }),
+    vscode.commands.registerCommand(
+      'hit.showGraph',
+      async (item?: HitTreeItem | string) => {
+        const repoKey =
+          typeof item === 'string'
+            ? item
+            : item?.repositoryName ||
+              hitSourceControlProvider.getCurrentRepository() ||
+              undefined
+        const repo = repoKey
+          ? hitSourceControlProvider.getRepositoryByKey(repoKey)
+          : hitSourceControlProvider.getRepository()
+        if (!repo) {
+          vscode.window.showWarningMessage('No repository detected')
+          return
+        }
+        const res = await cmdRun<CommandInput, CommandOutput>({
+          command: 'graph-log',
+          workspaceDir: repo.path,
+        })
+        if (!res.success) {
+          vscode.window.showErrorMessage(res.message || 'Failed to load graph')
+          return
+        }
+        GraphPanel.show(context, `Hit Graph — ${repo.name}`, res.data)
+      },
+    ),
   ]
 
   context.subscriptions.push(...disposables)
