@@ -3,7 +3,6 @@ import { User } from '@/types/auth'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { getTerminalToken } from '@/utils/session'
-import { useRepoStore } from './repoStore'
 
 interface AuthState {
   isUserLoaded: boolean

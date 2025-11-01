@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, use } from 'react'
 import { useRepoStore } from '@/stores/repoStore'
 import { RepositoryHeader } from '@/components/repository/RepositoryHeader'
-import { RepositoryTabs } from '@/components/repository/RepositoryTabs'
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
 import { FileTree } from '@/components/FileTree'
 import { Branch } from '@/types/repo'
