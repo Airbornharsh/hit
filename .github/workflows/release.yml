@@ -53,6 +53,7 @@ jobs:
 
       - name: Get version from tag
         id: get_version
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             VERSION=${GITHUB_REF#refs/tags/}
@@ -66,6 +67,7 @@ jobs:
           echo "Version: $VERSION"
 
       - name: Build binary
+        shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -114,6 +116,7 @@ jobs:
 
       - name: Get version and tag
         id: get_version
+        shell: bash
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
           VERSION=${TAG_NAME#v}
@@ -134,12 +137,15 @@ jobs:
           echo "Artifacts structure:"
           find artifacts -type f || true
           echo ""
+          echo "Listing all files in artifacts:"
+          find artifacts -type f -name "*.tar.gz" -o -name "*.zip" || true
+          echo ""
           # Copy all archive files to release-files
           find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-files/ \;
           echo ""
           echo "Files prepared for release:"
           ls -lh release-files/ || true
-          if [ ! "$(ls -A release-files)" ]; then
+          if [ ! "$(ls -A release-files 2>/dev/null)" ]; then
             echo "ERROR: No files found for release!"
             exit 1
           fi
