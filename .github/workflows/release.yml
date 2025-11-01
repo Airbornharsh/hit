@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build binaries
@@ -69,28 +72,36 @@ jobs:
           CGO_ENABLED: 0
         run: |
           go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" -o hit${{ matrix.ext }} ./main.go
-          chmod +x hit${{ matrix.ext }}
+          if [ "${{ matrix.goos }}" != "windows" ]; then
+            chmod +x hit${{ matrix.ext }}
+          fi
+          ls -lh hit${{ matrix.ext }}
+          file hit${{ matrix.ext }} || true
 
       - name: Create archive
         shell: bash
         run: |
           if [ "${{ matrix.goos }}" == "windows" ]; then
+            ARCHIVE_NAME="hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.zip"
             if command -v 7z &> /dev/null; then
-              7z a hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.zip hit${{ matrix.ext }}
+              7z a "$ARCHIVE_NAME" hit${{ matrix.ext }}
             else
-              zip hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.zip hit${{ matrix.ext }}
+              zip "$ARCHIVE_NAME" hit${{ matrix.ext }}
             fi
           else
-            tar -czf hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz hit${{ matrix.ext }}
+            ARCHIVE_NAME="hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz"
+            tar -czf "$ARCHIVE_NAME" hit${{ matrix.ext }}
           fi
+          ls -lh "$ARCHIVE_NAME"
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}
-          path: |
-            hit-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.*
-            hit${{ matrix.ext }}
+          path: ${{ env.ARCHIVE_NAME }}
+          if-no-files-found: error
+          retention-days: 1
 
   release:
     name: Create Release
@@ -101,30 +112,55 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get version
+      - name: Get version and tag
         id: get_version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+          echo "Tag: $TAG_NAME"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      - name: Prepare release files
+        shell: bash
+        run: |
+          mkdir -p release-files
+          echo "Artifacts structure:"
+          find artifacts -type f || true
+          echo ""
+          # Copy all archive files to release-files
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-files/ \;
+          echo ""
+          echo "Files prepared for release:"
+          ls -lh release-files/ || true
+          if [ ! "$(ls -A release-files)" ]; then
+            echo "ERROR: No files found for release!"
+            exit 1
+          fi
+
       - name: Create checksums
         shell: bash
         run: |
-          cd artifacts
-          find . -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec sh -c 'sha256sum "$1" > "$1.sha256"' _ {} \;
+          cd release-files
+          for file in *.tar.gz *.zip; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" > "$file.sha256"
+            fi
+          done
+          echo "Checksums created:"
+          ls -la *.sha256 || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.zip
-            artifacts/**/*.sha256
+          tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
+          name: Release v${{ steps.get_version.outputs.VERSION }}
           body: |
             ## Hit ${{ steps.get_version.outputs.VERSION }}
 
@@ -160,3 +196,7 @@ jobs:
             - Windows AMD64: `hit-${{ steps.get_version.outputs.VERSION }}-windows-amd64.zip`
           draft: false
           prerelease: false
+          files: |
+            release-files/*.tar.gz
+            release-files/*.zip
+            release-files/*.sha256
