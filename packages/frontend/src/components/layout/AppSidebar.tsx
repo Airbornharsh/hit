@@ -5,16 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
-import {
-  LayoutDashboard,
-  GitBranch,
-  Settings,
-  HelpCircle,
-  Plus,
-  Bell,
-  User,
-  ChevronDown,
-} from 'lucide-react'
+import { GitBranch, Settings, HelpCircle, Plus, User } from 'lucide-react'
 import { useMemo } from 'react'
 
 export function AppSidebar() {
@@ -24,16 +15,20 @@ export function AppSidebar() {
 
   const navigation = useMemo(
     () => [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-      {
-        name: 'Repositories',
-        href: `/${user?.username}/repositories`,
-        icon: GitBranch,
-      },
-      { name: 'Settings', href: '/settings', icon: Settings },
+      // { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+      ...(user
+        ? [
+            {
+              name: 'Repositories',
+              href: `/${user.username}/repositories`,
+              icon: GitBranch,
+            },
+            { name: 'Settings', href: '/settings', icon: Settings },
+          ]
+        : [{ name: 'Login/Signup', href: '/auth', icon: User }]),
       { name: 'Help', href: '/help', icon: HelpCircle },
     ],
-    [user?.username],
+    [user],
   )
 
   return (
@@ -52,38 +47,37 @@ export function AppSidebar() {
         {/* Action Buttons */}
         <div className="mb-4 flex items-center gap-2">
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            onClick={() => router.push(`/${user?.username}/repositories/new`)}
+            onClick={() => {
+              if (user?.username) {
+                router.push(`/${user?.username}/repositories/new`)
+              } else {
+                router.push('/auth')
+              }
+            }}
             className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex-1"
           >
             <Plus className="mr-2 h-4 w-4" />
             New
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <Bell className="h-4 w-4" />
-          </Button>
         </div>
 
-        {/* User Info */}
-        <div className="flex items-center gap-2">
-          <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
-            <User className="text-muted-foreground h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sidebar-foreground truncate text-sm font-medium">
-              {user?.name || 'User'}
+        {user && (
+          <div className="flex items-center gap-2">
+            <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
+              <User className="text-muted-foreground h-4 w-4" />
             </div>
-            <div className="text-muted-foreground truncate text-xs">
-              {user?.email || 'user@example.com'}
+            <div className="min-w-0 flex-1">
+              <div className="text-sidebar-foreground truncate text-sm font-medium">
+                {user?.name || 'User'}
+              </div>
+              <div className="text-muted-foreground truncate text-xs">
+                {user?.email || 'user@example.com'}
+              </div>
             </div>
           </div>
-          <ChevronDown className="text-muted-foreground h-4 w-4" />
-        </div>
+        )}
       </div>
 
       {/* Navigation */}

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 
 export default function AuthPage() {
   const [tab, setTab] = useState<'demo' | 'signin' | 'signup'>('demo')
@@ -47,6 +48,12 @@ export default function AuthPage() {
 
   return (
     <div className="bg-background flex min-h-full items-center justify-center p-4">
+      <Link
+        href="/help"
+        className="text-muted-foreground hover:text-foreground absolute top-4 right-4 text-sm transition-colors"
+      >
+        Help
+      </Link>
       <div className="w-full max-w-md">
         <Card className="bg-0 border-0">
           <CardHeader className="text-center">

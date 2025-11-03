@@ -6,10 +6,11 @@ import { useAuth, useUser } from '@clerk/nextjs'
 import { Loader2 } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
+import UsernameGate from '@/components/auth/UsernameGate'
 
 function RootLayout({ children }: { children: React.ReactNode }) {
   const { isLoaded, user: clerkUser } = useUser()
-  const { user } = useAuthStore()
+  const { user, isUserLoaded } = useAuthStore()
   const { getToken } = useAuth()
   const searchParams = useSearchParams()
   const pathname = usePathname()
@@ -20,7 +21,7 @@ function RootLayout({ children }: { children: React.ReactNode }) {
   const checkLocalTerminalSession = useAuthStore(
     (state) => state.checkLocalTerminalSession,
   )
-  //   const callOnce = useRef(false)
+
   const router = useRouter()
   const callOnce = useRef(false)
   const callOnce2 = useRef(false)
@@ -67,6 +68,11 @@ function RootLayout({ children }: { children: React.ReactNode }) {
     return pathname !== '/auth' && pathname !== '/terminal'
   }, [pathname])
 
+  const needsUsername = useMemo(() => {
+    if (!isLoaded || !clerkUser || !user || !isUserLoaded) return false
+    return !user?.username || user.username.trim() === ''
+  }, [isLoaded, clerkUser, user, isUserLoaded])
+
   if (!isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -80,7 +86,9 @@ function RootLayout({ children }: { children: React.ReactNode }) {
       {isLoadSidebar && (
         <div className="flex">
           <AppSidebar />
-          <main className="bg-background flex-1 p-6">{children}</main>
+          <main className="bg-background h-screen flex-1 overflow-y-auto p-6">
+            {children}
+          </main>
         </div>
       )}
       {!isLoadSidebar && (
@@ -88,6 +96,8 @@ function RootLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       )}
+
+      {needsUsername && <UsernameGate isOpen={needsUsername} />}
     </div>
   )
 }

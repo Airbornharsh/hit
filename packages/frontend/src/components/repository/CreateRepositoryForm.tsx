@@ -13,10 +13,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useRepoStore } from '@/stores/repoStore'
-import { Lock, Unlock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 
 export function CreateRepositoryForm({ userName }: { userName: string }) {
   const router = useRouter()
@@ -150,56 +149,6 @@ export function CreateRepositoryForm({ userName }: { userName: string }) {
                 <p className="text-muted-foreground text-xs">
                   {formData.description.length}/500 characters
                 </p>
-              </div>
-
-              {/* Visibility */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Visibility</Label>
-                <div className="space-y-3">
-                  <div
-                    className={`cursor-pointer rounded-lg border p-4 transition-colors ${
-                      formData.isPublic
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => handleInputChange('isPublic', true)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Unlock className="h-5 w-5 text-green-600" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">Public</span>
-                          <Badge variant="secondary" className="text-xs">
-                            Recommended
-                          </Badge>
-                        </div>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                          Anyone on the internet can see this repository. You
-                          choose who can commit.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`cursor-pointer rounded-lg border p-4 transition-colors ${
-                      !formData.isPublic
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => handleInputChange('isPublic', false)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Lock className="h-5 w-5 text-orange-600" />
-                      <div className="flex-1">
-                        <span className="font-medium">Private</span>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                          You choose who can see and commit to this repository.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Submit Button */}

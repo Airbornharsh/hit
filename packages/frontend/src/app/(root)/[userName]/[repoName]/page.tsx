@@ -8,7 +8,7 @@ import { FileTree } from '@/components/FileTree'
 import { Branch } from '@/types/repo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { GitBranch, Copy, Check } from 'lucide-react'
+import { GitBranch, Copy, Check, Download } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -76,6 +76,8 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
     }
   }
 
+  const cloneCmd = `hit clone "hit@hithub.com:${userName}/${repoName}.hit"`
+
   if (!activeRepo) {
     return (
       <div className="space-y-6">
@@ -98,13 +100,13 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       <Breadcrumbs
         items={[
           { label: 'Repositories', href: `/${userName}/repositories` },
           { label: repoName },
         ]}
-        className="mb-4"
+        className="mb-2"
       />
 
       <RepositoryHeader
@@ -112,6 +114,45 @@ export default function RepositoryPage({ params }: RepositoryPageProps) {
         activeBranch={branchName || activeBranch?.name || null}
         onBranchSelect={handleBranchSelect}
       />
+
+      {/* Clone command nicely styled */}
+      <Card className="border-border bg-card">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div className="flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            <CardTitle className="text-base">Clone this repository</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-muted-foreground text-sm">
+            Use the following command to clone locally:
+          </p>
+          <div className="border-border bg-muted rounded-md border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <code className="text-foreground font-mono text-sm break-all">
+                {cloneCmd}
+              </code>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => copyToClipboard(cloneCmd)}
+                className="shrink-0"
+              >
+                {copiedCommand === cloneCmd ? (
+                  <>
+                    <Check className="mr-2 h-4 w-4" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="mr-2 h-4 w-4" /> Copy
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* <RepositoryTabs repoName={repoName} userName={userName} /> */}
 
       {!isBranchesLoading && branches.length === 0 ? (
