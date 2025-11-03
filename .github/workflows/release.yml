@@ -186,12 +186,6 @@ jobs:
             sudo apt install hit
             ```
 
-            #### Windows (Scoop)
-            ```powershell
-            scoop bucket add airbornharsh https://github.com/airbornharsh/scoop-bucket
-            scoop install hit
-            ```
-
             ### Manual Installation
 
             Download the appropriate binary for your platform:
