@@ -1,6 +1,6 @@
 'use client'
 
-import { SignIn, SignUp, useSignIn } from '@clerk/nextjs'
+import { SignIn, SignUp, useSignIn, useUser } from '@clerk/nextjs'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Card,
@@ -9,20 +9,27 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 export default function AuthPage() {
   const [tab, setTab] = useState<'demo' | 'signin' | 'signup'>('demo')
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn } = useSignIn()
+  const { signIn, isLoaded } = useSignIn()
+  const { user } = useUser()
   const loadedData = useMemo(() => {
     return {
       email: 'harshkeshriwork@gmail.com',
       password: 'Airbornharsh123#',
     }
   }, [])
+
+  useEffect(() => {
+    if (isLoaded && user) {
+      window.location.href = '/'
+    }
+  }, [isLoaded, user])
 
   const handleDemoSignIn = async () => {
     try {
