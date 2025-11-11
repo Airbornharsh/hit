@@ -7,11 +7,23 @@ import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
 import { GitBranch, Settings, HelpCircle, Plus, User } from 'lucide-react'
 import { useMemo } from 'react'
+import { useClerk } from '@clerk/nextjs'
+import { LogOut } from 'lucide-react'
 
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuthStore()
+  const { user, logout } = useAuthStore()
+  const { signOut } = useClerk()
+  const handleLogout = async () => {
+    try {
+      logout()
+      await signOut({ redirectUrl: '/auth' })
+    } catch (error) {
+      console.error('Error during sign out:', error)
+      router.push('/auth')
+    }
+  }
 
   const navigation = useMemo(
     () => [
@@ -104,6 +116,44 @@ export function AppSidebar() {
           )
         })}
       </nav>
+
+      <div className="border-sidebar-border text-muted-foreground space-y-4 border-t p-4 text-sm">
+        {user && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full justify-start gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Log out
+          </Button>
+        )}
+        <a
+          href="https://twitter.com/airbornharsh"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-sidebar-foreground block transition-colors"
+        >
+          Twitter · @airbornharsh
+        </a>
+        <a
+          href="https://github.com/airbornharsh"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-sidebar-foreground block transition-colors"
+        >
+          GitHub · airbornharsh
+        </a>
+        <a
+          href="https://harshkeshri.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-sidebar-foreground block transition-colors"
+        >
+          Portfolio · harshkeshri.com
+        </a>
+      </div>
     </aside>
   )
 }
